@@ -1,0 +1,408 @@
+// Territory capture (PostGIS polygon zones). Replaces the old geohash ZoneService.
+// All spatial work is raw SQL — TypeORM doesn't model geometry natively.
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
+import { GameConfig } from '../config/configuration';
+import { haversineDistance } from '../common/helpers/geohash';
+import { formatDate, formatDateTime } from '../common/helpers/datetime';
+import { ZoneAreaRequestDto } from './dto/zone-area-request.dto';
+import { LatLngDto, ZoneItemDto } from './dto/zone-item.dto';
+import { ZoneDetailsDto } from './dto/zone-details.dto';
+import { ZoneCenterDto } from './dto/zone-center.dto';
+
+const DEFAULT_COLOR = '#3B82F6';
+
+// Normalise any geometry expression to a valid MultiPolygon (drops stray lines/points).
+const NORM = (expr: string): string =>
+  `ST_Multi(ST_CollectionExtract(ST_MakeValid(${expr}), 3))`;
+
+/** Minimal session info needed to build a territory at StopRun. */
+export interface CaptureSession {
+  userId: string;
+  runTypeId: number;
+  startedAt: Date;
+  endedAt: Date;
+}
+
+export interface CaptureResult {
+  closed: boolean; // start↔finish within close-loop distance
+  saved: boolean; // a polygon was actually created
+  reason?: 'tooShort' | 'blocked' | 'invalid'; // why nothing was saved (when !saved)
+  ranMeters?: number; // distance the server measured for this run (diagnostics / UI)
+  zoneId?: string;
+  areaKm2?: number;
+  centroidLat?: number;
+  centroidLng?: number;
+  // Run summary for the capture screen (same figures stored on the territory).
+  distanceKm?: number;
+  durationSeconds?: number;
+  avgSpeedKmh?: number;
+}
+
+interface PointRow {
+  latitude: number;
+  longitude: number;
+}
+
+@Injectable()
+export class ZonesService {
+  private readonly logger = new Logger(ZonesService.name);
+  private readonly game: GameConfig;
+
+  constructor(
+    @InjectDataSource() private readonly dataSource: DataSource,
+    config: ConfigService,
+  ) {
+    this.game = config.get<GameConfig>('game')!;
+  }
+
+  async getArea(request: ZoneAreaRequestDto): Promise<ZoneItemDto[]> {
+    const rows: Array<{
+      zoneid: string;
+      owneruserid: string;
+      username: string | null;
+      zonic_id: number | null;
+      selected_frame_code: string | null;
+      color: string;
+      area_m2: number;
+      captured_at: Date | null;
+      poly: string;
+    }> = await this.dataSource.query(
+      `SELECT t.id::text AS zoneid, t.owner_user_id::text AS owneruserid, u.username, u.zonic_id,
+              u.selected_frame_code,
+              t.color, t.area_m2, t.captured_at, ST_AsGeoJSON((d).geom) AS poly
+         FROM game_territory t
+         JOIN sys_user u ON u.id = t.owner_user_id
+         CROSS JOIN LATERAL ST_Dump(t.geom) d
+        WHERE t.geom && ST_MakeEnvelope($1, $2, $3, $4, 4326)`,
+      [request.minLng, request.minLat, request.maxLng, request.maxLat],
+    );
+    // Never emit a zone without a real polygon ring (< 4 pts) — the map would draw a fake circle.
+    return rows.map((r) => ZonesService.toZoneItem(r)).filter((z) => z.pathPolygon.length >= 4);
+  }
+
+  async getUserZones(userId: string): Promise<ZoneItemDto[]> {
+    const rows: Array<{
+      zoneid: string;
+      owneruserid: string;
+      username: string | null;
+      zonic_id: number | null;
+      selected_frame_code: string | null;
+      color: string;
+      area_m2: number;
+      captured_at: Date | null;
+      poly: string;
+    }> = await this.dataSource.query(
+      `SELECT t.id::text AS zoneid, t.owner_user_id::text AS owneruserid, u.username, u.zonic_id,
+              u.selected_frame_code,
+              t.color, t.area_m2, t.captured_at, ST_AsGeoJSON((d).geom) AS poly
+         FROM game_territory t
+         JOIN sys_user u ON u.id = t.owner_user_id
+         CROSS JOIN LATERAL ST_Dump(t.geom) d
+        WHERE t.owner_user_id = $1`,
+      [userId],
+    );
+    // Never emit a zone without a real polygon ring (< 4 pts) — the map would draw a fake circle.
+    return rows.map((r) => ZonesService.toZoneItem(r)).filter((z) => z.pathPolygon.length >= 4);
+  }
+
+  /** A single zone's polygon parts (used to broadcast ZoneUpdated after capture). */
+  async getZoneItem(zoneId: string): Promise<ZoneItemDto[]> {
+    const rows: Array<{
+      zoneid: string;
+      owneruserid: string;
+      username: string | null;
+      zonic_id: number | null;
+      selected_frame_code: string | null;
+      color: string;
+      area_m2: number;
+      captured_at: Date | null;
+      poly: string;
+    }> = await this.dataSource.query(
+      `SELECT t.id::text AS zoneid, t.owner_user_id::text AS owneruserid, u.username, u.zonic_id,
+              u.selected_frame_code,
+              t.color, t.area_m2, t.captured_at, ST_AsGeoJSON((d).geom) AS poly
+         FROM game_territory t
+         JOIN sys_user u ON u.id = t.owner_user_id
+         CROSS JOIN LATERAL ST_Dump(t.geom) d
+        WHERE t.id = $1`,
+      [zoneId],
+    );
+    // Never emit a zone without a real polygon ring (< 4 pts) — the map would draw a fake circle.
+    return rows.map((r) => ZonesService.toZoneItem(r)).filter((z) => z.pathPolygon.length >= 4);
+  }
+
+  /** Centre {lat,lng} of a user's territories (by ZONIC-ID) so the camera can fly to their zone. */
+  async getCenterFor(zonicId: number): Promise<ZoneCenterDto> {
+    const [u] = await this.dataSource.query(
+      `SELECT id::text FROM sys_user WHERE zonic_id = $1`,
+      [zonicId],
+    );
+    if (!u) throw new NotFoundException('User not found.');
+    const [c] = await this.dataSource.query(
+      `SELECT ST_Y(ST_Centroid(ST_Collect(geom))) AS lat,
+              ST_X(ST_Centroid(ST_Collect(geom))) AS lng
+         FROM game_territory WHERE owner_user_id = $1`,
+      [u.id],
+    );
+    if (!c || c.lat == null) throw new NotFoundException('This user has no territory yet.');
+    return { lat: Number(c.lat), lng: Number(c.lng) };
+  }
+
+  async getDetails(id: string): Promise<ZoneDetailsDto> {
+    // Tolerate legacy composite ids ("<uuid>_<part>") and reject non-UUIDs with a clean 404
+    // instead of letting Postgres throw "invalid input syntax for type uuid" (a 500).
+    const zoneId = ZonesService.normalizeUuid(id);
+    if (!zoneId) throw new NotFoundException('Zone not found.');
+
+    const rows: Array<{
+      zoneid: string;
+      owneruserid: string;
+      zonic_id: number | null;
+      username: string | null;
+      avatar_file_id: string | null;
+      selected_frame_code: string | null;
+      area_m2: number;
+      captured_at: Date | null;
+    }> = await this.dataSource.query(
+      `SELECT t.id::text AS zoneid, t.owner_user_id::text AS owneruserid, u.zonic_id,
+              u.username, u.avatar_file_id, u.selected_frame_code, t.area_m2, t.captured_at
+         FROM game_territory t
+         JOIN sys_user u ON u.id = t.owner_user_id
+        WHERE t.id = $1`,
+      [zoneId],
+    );
+    const r = rows[0];
+    if (!r) throw new NotFoundException('Zone not found.');
+    return {
+      zoneId: r.zoneid,
+      ownerUserId: r.owneruserid,
+      ownerZonicId: r.zonic_id,
+      ownerUsername: r.username,
+      ownerSelectedFrameCode: r.selected_frame_code,
+      ownerAvatarFileId: r.avatar_file_id,
+      ownerAvatarUrl: r.avatar_file_id
+        ? `/UserProfile/DownloadAvatar?fileId=${r.avatar_file_id}`
+        : null,
+      areaKm2: ZonesService.round(r.area_m2 / 1_000_000, 4),
+      capturedAt: r.captured_at ? formatDateTime(new Date(r.captured_at)) : null,
+    };
+  }
+
+  /** Recolor every zone owned by the user (called when the profile color changes). */
+  async recolorUserZones(userId: string, color: string): Promise<void> {
+    await this.dataSource.query(
+      `UPDATE game_territory SET color = $2 WHERE owner_user_id = $1`,
+      [userId, color],
+    );
+  }
+
+  /**
+   * Capture territory from a completed run, applying all rules:
+   *  - Rule 1: closed loop (start↔finish ≤ closeLoopDistance) → interior polygon.
+   *  - Rule 4: full capture (run_km ≥ area_km² × ratio AND new fully covers old) → delete old.
+   *  - Rule 2/3: overtake & cut (run_dist ≥ owner_dist × factor) → cut old (ST_Difference);
+   *             otherwise the new zone is clipped so it cannot eat the protected zone.
+   *  - Rule 5: merge with the same user's zones that touch or whose centroid is within
+   *             mergeCentroid distance (ST_Union); also covers expansion (start inside own zone).
+   * All writes run in one transaction.
+   */
+  async captureFromRun(session: CaptureSession): Promise<CaptureResult> {
+    const points: PointRow[] = await this.dataSource.query(
+      `SELECT latitude, longitude FROM game_location_point
+        WHERE user_id = $1 AND recorded_at BETWEEN $2 AND $3
+        ORDER BY recorded_at ASC`,
+      [session.userId, session.startedAt, session.endedAt],
+    );
+
+    if (points.length < 3) return { closed: false, saved: false };
+
+    const first = points[0];
+    const last = points[points.length - 1];
+    const gap = haversineDistance(first.latitude, first.longitude, last.latitude, last.longitude);
+    if (gap > this.game.closeLoopDistanceM) return { closed: false, saved: false };
+
+    // Closed ring WKT (append the first point to close it) + run distance (haversine sum).
+    const ring = [...points, first];
+    const wkt = `LINESTRING(${ring.map((p) => `${p.longitude} ${p.latitude}`).join(', ')})`;
+    let runDistanceM = 0;
+    for (let i = 1; i < points.length; i++) {
+      runDistanceM += haversineDistance(
+        points[i - 1].latitude, points[i - 1].longitude,
+        points[i].latitude, points[i].longitude,
+      );
+    }
+
+    // Reject runs shorter than the minimum (filters GPS-noise micro-loops).
+    if (runDistanceM < this.game.minRunDistanceM) {
+      return { closed: true, saved: false, reason: 'tooShort', ranMeters: Math.round(runDistanceM) };
+    }
+
+    const { minZoneAreaM2, mergeCentroidM } = this.game;
+    const userId = session.userId;
+
+    return this.dataSource.transaction(async (manager) => {
+      // A) Build the polygon from the closed ring.
+      // Real GPS tracks self-intersect, which makes ST_MakePolygon throw. ST_Node splits
+      // the line at every crossing and ST_BuildArea fills the enclosed faces — robust to noise.
+      const built: Array<{ ewkt: string; empty: boolean }> = await manager.query(
+        `SELECT ST_AsEWKT(g) AS ewkt, ST_IsEmpty(g) AS empty
+           FROM (SELECT ${NORM('ST_BuildArea(ST_Node(ST_GeomFromText($1, 4326)))')} AS g) q`,
+        [wkt],
+      );
+      if (!built[0] || built[0].empty) {
+        this.logger.warn(`Invalid capture polygon for user ${userId}`);
+        return { closed: true, saved: false, reason: 'invalid' };
+      }
+      // The runner always keeps everything they enclosed — no clipping, no distance gate.
+      const znew = built[0].ewkt;
+
+      // B) Every OTHER user's zone overlapping the new one is overtaken (cut), regardless of
+      //    distance. A fully-covered zone becomes empty after the cut → deleted (full capture).
+      const others: Array<{ id: string }> = await manager.query(
+        `SELECT id::text AS id FROM game_territory
+          WHERE owner_user_id <> $2
+            AND geom && ST_GeomFromEWKT($1)
+            AND ST_Intersects(geom, ST_GeomFromEWKT($1))`,
+        [znew, userId],
+      );
+      const cutIds = others.map((z) => z.id);
+
+      // C) Cut the overlap out of every overlapping zone; drop empty/tiny remainders.
+      if (cutIds.length > 0) {
+        const rem: Array<{ id: string; rem_area: number | null }> = await manager.query(
+          `SELECT id::text AS id, ST_Area(ST_Difference(geom, ST_GeomFromEWKT($1))::geography) AS rem_area
+             FROM game_territory WHERE id = ANY($2::uuid[])`,
+          [znew, cutIds],
+        );
+        const toDelete = rem
+          .filter((r) => r.rem_area == null || Number(r.rem_area) < minZoneAreaM2)
+          .map((r) => r.id);
+        const toUpdate = rem.map((r) => r.id).filter((id) => !toDelete.includes(id));
+
+        if (toUpdate.length > 0) {
+          await manager.query(
+            `UPDATE game_territory
+                SET geom     = ${NORM('ST_Difference(geom, ST_GeomFromEWKT($1))')},
+                    centroid = ST_Centroid(${NORM('ST_Difference(geom, ST_GeomFromEWKT($1))')}),
+                    area_m2  = ST_Area((${NORM('ST_Difference(geom, ST_GeomFromEWKT($1))')})::geography)
+              WHERE id = ANY($2::uuid[])`,
+            [znew, toUpdate],
+          );
+        }
+        if (toDelete.length > 0) {
+          await manager.query(`DELETE FROM game_territory WHERE id = ANY($1::uuid[])`, [toDelete]);
+        }
+      }
+
+      // F) Rule 5 — merge with the same user's touching / nearby-centroid zones.
+      const neighbors: Array<{ id: string; run_distance_m: number }> = await manager.query(
+        `SELECT id::text AS id, run_distance_m FROM game_territory
+          WHERE owner_user_id = $2
+            AND ( ST_Intersects(geom, ST_GeomFromEWKT($1))
+               OR ST_DWithin(centroid::geography, ST_Centroid(ST_GeomFromEWKT($1))::geography, $3) )`,
+        [znew, userId, mergeCentroidM],
+      );
+
+      let finalEwkt = znew;
+      let runDist = runDistanceM;
+      if (neighbors.length > 0) {
+        const ids = neighbors.map((n) => n.id);
+        runDist = Math.max(runDistanceM, ...neighbors.map((n) => Number(n.run_distance_m)));
+        const merged: Array<{ ewkt: string }> = await manager.query(
+          `SELECT ST_AsEWKT(${NORM(
+            'ST_Union(ST_GeomFromEWKT($1), (SELECT ST_Union(geom) FROM game_territory WHERE id = ANY($2::uuid[])))',
+          )}) AS ewkt`,
+          [znew, ids],
+        );
+        finalEwkt = merged[0].ewkt;
+        await manager.query(`DELETE FROM game_territory WHERE id = ANY($1::uuid[])`, [ids]);
+      }
+
+      // G) Insert the final zone. Store this run's duration + avg speed (km/h) so the Activity
+      //    History can show avgSpeed for territory items.
+      const durationSeconds = Math.max(
+        0,
+        Math.round((session.endedAt.getTime() - session.startedAt.getTime()) / 1000),
+      );
+      const avgSpeedKmh =
+        durationSeconds > 0 ? (runDistanceM / 1000) / (durationSeconds / 3600) : 0;
+      const inserted: Array<{ id: string; area_m2: number; lat: number; lng: number }> =
+        await manager.query(
+          `INSERT INTO game_territory
+             (owner_user_id, color, geom, centroid, area_m2, run_distance_m, duration_seconds, avg_speed_kmh)
+           SELECT $2, COALESCE(u.color, $4), g.geom, ST_Centroid(g.geom),
+                  ST_Area(g.geom::geography), $3, $5, $6
+             FROM (SELECT ${NORM('ST_GeomFromEWKT($1)')} AS geom) g CROSS JOIN sys_user u
+            WHERE u.id = $2 AND NOT ST_IsEmpty(g.geom)
+           RETURNING id::text AS id, area_m2, ST_Y(centroid) AS lat, ST_X(centroid) AS lng`,
+          [finalEwkt, userId, runDist, DEFAULT_COLOR, durationSeconds, Math.round(avgSpeedKmh * 100) / 100],
+        );
+
+      const row = inserted[0];
+      if (!row) return { closed: true, saved: false, reason: 'invalid' };
+
+      return {
+        closed: true,
+        saved: true,
+        zoneId: row.id,
+        areaKm2: ZonesService.round(row.area_m2 / 1_000_000, 4),
+        centroidLat: row.lat,
+        centroidLng: row.lng,
+        distanceKm: ZonesService.round(runDistanceM / 1000, 2),
+        durationSeconds,
+        avgSpeedKmh: ZonesService.round(avgSpeedKmh, 2),
+      };
+    });
+  }
+
+  private static toZoneItem(r: {
+    zoneid: string;
+    owneruserid: string;
+    zonic_id: number | null;
+    username: string | null;
+    selected_frame_code: string | null;
+    color: string;
+    area_m2: number;
+    captured_at: Date | null;
+    poly: string;
+  }): ZoneItemDto {
+    return {
+      zoneId: r.zoneid,
+      ownerUserId: r.owneruserid,
+      ownerZonicId: r.zonic_id,
+      ownerUsername: r.username,
+      ownerSelectedFrameCode: r.selected_frame_code,
+      color: r.color ?? DEFAULT_COLOR,
+      areaKm2: ZonesService.round(r.area_m2 / 1_000_000, 4),
+      capturedAt: r.captured_at ? formatDate(new Date(r.captured_at)) : null,
+      pathPolygon: ZonesService.outerRing(r.poly),
+    };
+  }
+
+  /** GeoJSON Polygon string → outer ring as [{lat,lng}]. */
+  private static outerRing(geojson: string): LatLngDto[] {
+    try {
+      const g = JSON.parse(geojson) as { type: string; coordinates: number[][][] };
+      const ring = g.coordinates?.[0] ?? [];
+      return ring.map(([lng, lat]) => ({ lat, lng }));
+    } catch {
+      return [];
+    }
+  }
+
+  private static round(v: number, d: number): number {
+    const f = 10 ** d;
+    return Math.round(v * f) / f;
+  }
+
+  /** Accept a plain UUID or a legacy "<uuid>_<part>" id; return the UUID, or null if invalid. */
+  private static normalizeUuid(raw: string): string | null {
+    const candidate = raw.includes('_') ? raw.slice(0, raw.indexOf('_')) : raw;
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(candidate)
+      ? candidate
+      : null;
+  }
+}
