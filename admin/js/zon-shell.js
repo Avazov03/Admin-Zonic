@@ -94,7 +94,132 @@
 
   /** Demo billing/pricing — faqat user dropdown tozalanadi. */
   function cleanTemplateChrome() {
-    // Til, theme — keyinga; shortcuts setupShortcuts() da
+    // shortcuts / theme / lang alohida setup*
+  }
+
+  var THEME_KEY = "zon_admin_theme";
+  var THEME_LEGACY = "templateCustomizer-vertical-menu-template--Theme";
+
+  function readThemeMode() {
+    var mode = "light";
+    try {
+      mode =
+        localStorage.getItem(THEME_KEY) ||
+        localStorage.getItem(THEME_LEGACY) ||
+        document.documentElement.getAttribute("data-zon-theme-mode") ||
+        "light";
+    } catch (_) {}
+    if (mode !== "light" && mode !== "dark" && mode !== "system") mode = "light";
+    return mode;
+  }
+
+  function resolveTheme(mode) {
+    if (mode === "system") {
+      try {
+        return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      } catch (_) {
+        return "light";
+      }
+    }
+    return mode === "dark" ? "dark" : "light";
+  }
+
+  function paintThemeUi(mode) {
+    var resolved = resolveTheme(mode);
+    document.documentElement.setAttribute("data-bs-theme", resolved);
+    document.documentElement.setAttribute("data-zon-theme-mode", mode);
+
+    var iconMap = { light: "sun", dark: "moon", system: "desktop" };
+    var activeIcon = document.querySelector(".theme-icon-active");
+    if (activeIcon) {
+      var keep = Array.prototype.filter.call(activeIcon.classList, function (c) {
+        return c.indexOf("bx-") !== 0;
+      });
+      activeIcon.className = "bx-" + (iconMap[mode] || "sun") + " " + keep.join(" ");
+      if (activeIcon.className.indexOf("icon-base") < 0) {
+        activeIcon.className = "icon-base bx bx-" + (iconMap[mode] || "sun") + " icon-md theme-icon-active";
+      } else {
+        activeIcon.className =
+          "icon-base bx bx-" + (iconMap[mode] || "sun") + " icon-md theme-icon-active";
+      }
+    }
+
+    document.querySelectorAll("[data-bs-theme-value]").forEach(function (btn) {
+      var v = btn.getAttribute("data-bs-theme-value");
+      var on = v === mode;
+      btn.classList.toggle("active", on);
+      btn.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+
+    if (window.Helpers && typeof Helpers.switchImage === "function") {
+      try {
+        Helpers.switchImage(resolved);
+      } catch (_) {}
+    }
+  }
+
+  function saveThemeMode(mode) {
+    try {
+      localStorage.setItem(THEME_KEY, mode);
+      localStorage.setItem(THEME_LEGACY, mode);
+    } catch (_) {}
+  }
+
+  function setupTheme() {
+    if (document.documentElement.getAttribute("data-zon-theme") === "1") return;
+    document.documentElement.setAttribute("data-zon-theme", "1");
+
+    var mode = readThemeMode();
+    paintThemeUi(mode);
+
+    document.querySelectorAll("[data-bs-theme-value]").forEach(function (btn) {
+      btn.addEventListener("click", function (e) {
+        e.preventDefault();
+        var next = btn.getAttribute("data-bs-theme-value") || "light";
+        if (next !== "light" && next !== "dark" && next !== "system") next = "light";
+        saveThemeMode(next);
+        paintThemeUi(next);
+      });
+    });
+
+    try {
+      var mq = window.matchMedia("(prefers-color-scheme: dark)");
+      var onSys = function () {
+        if (readThemeMode() === "system") paintThemeUi("system");
+      };
+      if (mq.addEventListener) mq.addEventListener("change", onSys);
+      else if (mq.addListener) mq.addListener(onSys);
+    } catch (_) {}
+  }
+
+  function setupLanguage() {
+    var root = document.querySelector(".dropdown-language");
+    if (!root || root.getAttribute("data-zon-lang") === "1") return;
+    root.setAttribute("data-zon-lang", "1");
+
+    // ZonI18n bind qiladi; faqat toggle matnini aniqroq qilamiz
+    var toggle = root.querySelector(".nav-link");
+    if (toggle && !toggle.querySelector(".zon-lang-code")) {
+      var code = document.createElement("span");
+      code.className = "zon-lang-code ms-1 d-none d-sm-inline small fw-semibold";
+      var lang =
+        (window.ZonI18n && ZonI18n.lang) ||
+        (function () {
+          try {
+            return localStorage.getItem("zon_admin_lang") || "uz";
+          } catch (_) {
+            return "uz";
+          }
+        })();
+      code.textContent = String(lang).toUpperCase();
+      toggle.appendChild(code);
+    }
+
+    if (window.ZonI18n && typeof ZonI18n.apply === "function") {
+      try {
+        ZonI18n.apply();
+      } catch (_) {}
+    }
   }
 
   var SHORTCUTS = [
@@ -584,10 +709,14 @@
   function boot() {
     splitMenu();
     cleanTemplateChrome();
+    setupTheme();
     if (!isAuth) {
+      setupLanguage();
       setupShortcuts();
       setupNavbarUser();
       // notifications setupNavbarUser ichida adminMe dan keyin
+    } else {
+      setupLanguage();
     }
     bindLogout();
   }

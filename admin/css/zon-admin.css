@@ -371,3 +371,12 @@ div[class*="buy-now"] {
   object-fit: cover;
   display: block;
 }
+
+/* Theme: dark mode soft overrides */
+[data-bs-theme='dark'] .zon-heat-tip {
+  background: var(--bs-paper-bg, #2b2c40);
+  color: var(--bs-body-color, #fff);
+}
+[data-bs-theme='dark'] .dropdown-user .avatar img {
+  border-color: transparent;
+}
