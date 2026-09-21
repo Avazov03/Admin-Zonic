@@ -104,7 +104,18 @@ export class AdminService {
 
   // ─── Dashboard ───────────────────────────────────────────────────────────
   async dashboard() {
-    const [[users], [events], [todayRun], [todaySteps], daily] = await Promise.all([
+    const [
+      [users],
+      [events],
+      [todayRun],
+      [todaySteps],
+      [territories],
+      [badges],
+      [market],
+      [news],
+      [push],
+      daily,
+    ] = await Promise.all([
       this.db.query(
         `SELECT COUNT(*)::int AS total,
                 COUNT(*) FILTER (WHERE is_blocked)::int AS blocked,
@@ -114,7 +125,8 @@ export class AdminService {
       ),
       this.db.query(
         `SELECT COUNT(*) FILTER (WHERE status = 'published' AND starts_at <= now() AND ends_at >= now())::int AS active,
-                COUNT(*) FILTER (WHERE status = 'published')::int AS published
+                COUNT(*) FILTER (WHERE status = 'published')::int AS published,
+                (SELECT COUNT(*)::int FROM game_event_participant) AS participants_total
            FROM game_event`,
       ),
       this.db.query(
@@ -126,10 +138,38 @@ export class AdminService {
            FROM game_step_activity WHERE started_at >= CURRENT_DATE`,
       ),
       this.db.query(
+        `SELECT COUNT(*)::int AS total,
+                COUNT(*) FILTER (WHERE captured_at >= CURRENT_DATE)::int AS captured_today
+           FROM game_territory`,
+      ),
+      this.db.query(
+        `SELECT COUNT(*)::int AS total_unlocks
+           FROM game_user_achievement`,
+      ),
+      this.db.query(
+        `SELECT COUNT(*)::int AS total,
+                COUNT(*) FILTER (WHERE is_active)::int AS active,
+                COUNT(*) FILTER (WHERE is_premium)::int AS premium
+           FROM market_item`,
+      ),
+      this.db.query(
+        `SELECT COUNT(*) FILTER (WHERE is_published)::int AS published,
+                COUNT(*) FILTER (WHERE NOT is_published)::int AS draft
+           FROM game_news`,
+      ),
+      this.db.query(
+        `SELECT COUNT(*)::int AS campaigns,
+                COALESCE(SUM(sent_count), 0)::bigint AS sent_total
+           FROM admin_push_campaign`,
+      ),
+      this.db.query(
         `SELECT d::date AS day,
                 (SELECT COUNT(*) FROM sys_user u WHERE u.dateofcreated::date = d)::int AS new_users,
                 (SELECT COUNT(*) FROM game_free_run r WHERE r.started_at::date = d)::int AS runs,
-                (SELECT COALESCE(SUM(distance_km), 0) FROM game_free_run r WHERE r.started_at::date = d)::float AS km
+                (SELECT COALESCE(SUM(distance_km), 0) FROM game_free_run r WHERE r.started_at::date = d)::float AS km,
+                (SELECT COALESCE(SUM(steps), 0) FROM game_step_activity s WHERE s.started_at::date = d)::bigint AS steps,
+                (SELECT COUNT(*) FROM game_territory t WHERE t.captured_at::date = d)::int AS territories,
+                (SELECT COUNT(*) FROM game_user_achievement a WHERE a.unlocked_at::date = d)::int AS unlocks
            FROM generate_series(CURRENT_DATE - 6, CURRENT_DATE, interval '1 day') AS d
            ORDER BY 1`,
       ),
@@ -142,17 +182,54 @@ export class AdminService {
         newToday: Number(users.new_today),
         activeLast3Days: Number(users.active_3d),
       },
-      events: { active: Number(events.active), published: Number(events.published) },
+      events: {
+        active: Number(events.active),
+        published: Number(events.published),
+        participantsTotal: Number(events.participants_total),
+      },
       activityToday: {
         runs: Number(todayRun.runs),
         distanceKm: Number(todayRun.km),
         steps: Number(todaySteps.steps),
       },
-      last7Days: (daily as Array<{ day: Date; new_users: number; runs: number; km: number }>).map((r) => ({
+      territories: {
+        total: Number(territories.total),
+        capturedToday: Number(territories.captured_today),
+      },
+      badges: {
+        totalUnlocks: Number(badges.total_unlocks),
+      },
+      market: {
+        total: Number(market.total),
+        active: Number(market.active),
+        premium: Number(market.premium),
+      },
+      news: {
+        published: Number(news.published),
+        draft: Number(news.draft),
+      },
+      push: {
+        campaigns: Number(push.campaigns),
+        sentTotal: Number(push.sent_total),
+      },
+      last7Days: (
+        daily as Array<{
+          day: Date;
+          new_users: number;
+          runs: number;
+          km: number;
+          steps: number;
+          territories: number;
+          unlocks: number;
+        }>
+      ).map((r) => ({
         day: formatIso(new Date(r.day)).slice(0, 10),
         newUsers: Number(r.new_users),
         runs: Number(r.runs),
         distanceKm: Number(r.km),
+        steps: Number(r.steps),
+        territories: Number(r.territories),
+        unlocks: Number(r.unlocks),
       })),
     };
   }
