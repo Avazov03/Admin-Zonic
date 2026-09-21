@@ -661,28 +661,32 @@ export class AdminService {
       throw badRequest(['userIds required for audience=userIds.']);
     }
     const userIds = await this.audienceUserIds(dto.audience, dto.userIds);
-    const sent = await this.fanoutNotification(userIds, 'system', dto.title, dto.body ?? null, {
-      campaign: 'admin',
-    });
+    // Avval kampaniya yozuvi — notification payload ga campaignId bog‘lash uchun
     const [row] = await this.db.query(
       `INSERT INTO admin_push_campaign (title, body, audience, user_ids, sent_count, created_by)
-       VALUES ($1,$2,$3,$4::jsonb,$5,$6)
+       VALUES ($1,$2,$3,$4::jsonb,0,$5)
        RETURNING id::text, title, body, audience, sent_count, created_at`,
       [
         dto.title,
         dto.body ?? null,
         dto.audience,
         JSON.stringify(dto.userIds ?? []),
-        sent,
         adminId,
       ],
     );
+    const sent = await this.fanoutNotification(userIds, 'system', dto.title, dto.body ?? null, {
+      campaign: 'admin',
+      campaignId: row.id,
+    });
+    await this.db.query(`UPDATE admin_push_campaign SET sent_count = $2 WHERE id = $1`, [row.id, sent]);
     return {
       id: row.id,
       title: row.title,
       body: row.body,
       audience: row.audience,
-      sentCount: Number(row.sent_count),
+      sentCount: sent,
+      notifSent: sent,
+      notifRead: 0,
       createdAt: formatIso(new Date(row.created_at)),
     };
   }
@@ -691,13 +695,25 @@ export class AdminService {
     const rows = await this.db.query(
       `SELECT p.id::text, p.title, p.body, p.audience, p.sent_count, p.created_at,
               (SELECT COUNT(*) FROM game_notification n
-                WHERE n.type = 'system' AND n.title = p.title
-                  AND n.created_at >= p.created_at - interval '1 minute'
-                  AND n.created_at <= p.created_at + interval '30 minutes')::int AS notif_sent,
+                WHERE (
+                  (n.payload->>'campaignId' = p.id::text)
+                  OR (
+                    n.payload->>'campaignId' IS NULL
+                    AND n.type = 'system' AND n.title = p.title
+                    AND n.created_at >= p.created_at - interval '2 minutes'
+                    AND n.created_at <= p.created_at + interval '30 minutes'
+                  )
+                ))::int AS notif_sent,
               (SELECT COUNT(*) FROM game_notification n
-                WHERE n.type = 'system' AND n.title = p.title AND n.is_read
-                  AND n.created_at >= p.created_at - interval '1 minute'
-                  AND n.created_at <= p.created_at + interval '30 minutes')::int AS notif_read
+                WHERE n.is_read AND (
+                  (n.payload->>'campaignId' = p.id::text)
+                  OR (
+                    n.payload->>'campaignId' IS NULL
+                    AND n.type = 'system' AND n.title = p.title
+                    AND n.created_at >= p.created_at - interval '2 minutes'
+                    AND n.created_at <= p.created_at + interval '30 minutes'
+                  )
+                ))::int AS notif_read
          FROM admin_push_campaign p ORDER BY p.created_at DESC
         LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`,
     );
@@ -940,16 +956,39 @@ export class AdminService {
 
   // ─── News ────────────────────────────────────────────────────────────────
   async listAdminNews() {
+    // Yangilik o‘zi push/inbox yubormaydi; musobaqa e’loni bilan yaratilgan
+    // announcement lar event notification ga bog‘lanadi (title bo‘yicha chalkashmasin).
     const rows = await this.db.query(
       `SELECT n.id::text, n.type, n.title, n.body, n.image_file_id, n.is_published, n.published_at, n.created_at,
-              (SELECT COUNT(*) FROM game_notification gn
-                WHERE gn.title = n.title
-                  AND gn.created_at >= COALESCE(n.published_at, n.created_at) - interval '1 minute'
-                  AND gn.created_at <= COALESCE(n.published_at, n.created_at) + interval '30 minutes')::int AS notif_sent,
-              (SELECT COUNT(*) FROM game_notification gn
-                WHERE gn.title = n.title AND gn.is_read
-                  AND gn.created_at >= COALESCE(n.published_at, n.created_at) - interval '1 minute'
-                  AND gn.created_at <= COALESCE(n.published_at, n.created_at) + interval '30 minutes')::int AS notif_read
+              CASE
+                WHEN n.type = 'announcement' THEN (
+                  SELECT COUNT(*)::int FROM game_notification gn
+                   WHERE gn.type = 'event' AND gn.title = n.title
+                     AND gn.payload ? 'eventId'
+                     AND EXISTS (
+                       SELECT 1 FROM game_event e
+                        WHERE e.id::text = gn.payload->>'eventId' AND e.title = n.title
+                     )
+                )
+                ELSE 0
+              END AS notif_sent,
+              CASE
+                WHEN n.type = 'announcement' THEN (
+                  SELECT COUNT(*)::int FROM game_notification gn
+                   WHERE gn.type = 'event' AND gn.is_read AND gn.title = n.title
+                     AND gn.payload ? 'eventId'
+                     AND EXISTS (
+                       SELECT 1 FROM game_event e
+                        WHERE e.id::text = gn.payload->>'eventId' AND e.title = n.title
+                     )
+                )
+                ELSE 0
+              END AS notif_read,
+              CASE
+                WHEN n.type = 'announcement' AND EXISTS (
+                  SELECT 1 FROM game_event e WHERE e.title = n.title
+                ) THEN true ELSE false
+              END AS from_event
          FROM game_news n ORDER BY n.created_at DESC`,
     );
     return { items: rows.map((r) => this.mapNews(r)) };
@@ -1391,6 +1430,7 @@ export class AdminService {
       createdAt: formatIso(new Date(r.created_at as Date)),
       notifSent: Number(r.notif_sent ?? 0),
       notifRead: Number(r.notif_read ?? 0),
+      fromEvent: Boolean(r.from_event),
     };
   }
 }

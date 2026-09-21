@@ -32,7 +32,7 @@
       '<div class="card-body pt-0">' +
       '<ul class="nav nav-pills mb-4 flex-wrap gap-1" id="z-filters" role="tablist"></ul>' +
       '<div class="table-responsive"><table class="table table-hover">' +
-      "<thead><tr><th>Sarlavha</th><th>Auditoriya</th><th>Yuborildi</th><th>O‘qildi</th><th>Sana</th></tr></thead>" +
+      "<thead><tr><th>Sarlavha</th><th>Auditoriya</th><th>Yuborildi</th><th>App o‘qigan</th><th>Sana</th></tr></thead>" +
       '<tbody id="z-history"></tbody></table></div>' +
       '<div class="d-flex justify-content-between align-items-center mt-3">' +
       '<div class="btn-group">' +
@@ -144,11 +144,9 @@
                 U.n(nRead) +
                 "</span> / " +
                 U.n(nSent) +
-                (nSent
-                  ? ' <small class="text-body-secondary">(' +
-                    Math.round((nRead / nSent) * 100) +
-                    "%)</small>"
-                  : "")
+                ' <small class="text-body-secondary">inbox (' +
+                Math.round((nRead / nSent) * 100) +
+                "%)</small>"
               : '<span class="text-body-secondary">—</span>';
             return (
               "<tr><td><span class=\"fw-medium\">" +
@@ -157,9 +155,13 @@
               U.esc(x.body || "") +
               "</small></td><td>" +
               audienceBadge(x.audience) +
-              "</td><td><span class=\"fw-semibold\">" +
+              '</td><td><span class="fw-semibold" title="Fanout / push urinish">' +
               U.n(sent) +
-              "</span></td><td>" +
+              "</span>" +
+              (nSent && nSent !== sent
+                ? '<br><small class="text-body-secondary">inbox ' + U.n(nSent) + "</small>"
+                : "") +
+              "</td><td>" +
               readCell +
               "</td><td>" +
               U.dt(x.createdAt) +
@@ -188,9 +190,9 @@
           U.statCard("Tarix", U.n(totalAll), "Kampaniya", "bx-bell", "primary") +
           U.statCard("Yuborildi", U.n(c.sent), "Shu sahifa", "bx-send", "success") +
           U.statCard(
-            "O‘qildi",
+            "Inbox o‘qigan",
             U.n(nRead) + (nSent ? " / " + U.n(nSent) : ""),
-            "App inbox",
+            "Ilova ichida (FCM open emas)",
             "bx-envelope-open",
             "info"
           ) +

@@ -16,13 +16,13 @@
       '<div class="card">' +
       '<div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-3">' +
       '<div><h5 class="card-title mb-1">Yangiliklar</h5>' +
-      '<p class="mb-0 text-body-secondary small">E’lon bilan yuborilgan app bildirishnoma (sahifa view yo‘q)</p></div>' +
+      '<p class="mb-0 text-body-secondary small">Oddiy yangilikda ko‘rish yo‘q. Musobaqa e’lonida — app inbox o‘qilishi</p></div>' +
       '<button type="button" class="btn btn-primary" id="z-new">Yangi</button></div>' +
       '<div id="z-alert" class="px-6 pt-4"></div>' +
       '<div class="card-body pt-0">' +
       '<ul class="nav nav-pills mb-4 flex-wrap gap-1" id="z-filters" role="tablist"></ul>' +
       '<div class="table-responsive"><table class="table table-hover">' +
-      "<thead><tr><th></th><th>Tur</th><th>Sarlavha</th><th>Holat</th><th>Bildirishnoma</th><th>Sana</th><th></th></tr></thead>" +
+      "<thead><tr><th></th><th>Tur</th><th>Sarlavha</th><th>Holat</th><th>App o‘qigan</th><th>Sana</th><th></th></tr></thead>" +
       '<tbody id="z-body"></tbody></table></div></div></div>' +
       formModal();
 
@@ -148,16 +148,17 @@
   function notifCell(n) {
     var sent = Number(n.notifSent || 0);
     var read = Number(n.notifRead || 0);
-    if (!sent) return '<span class="text-body-secondary" title="Faqat push/e’lon bilan yuborilganda">—</span>';
-    return (
-      '<span class="fw-medium">' +
-      U.n(read) +
-      "</span> / " +
-      U.n(sent) +
-      ' <small class="text-body-secondary">(' +
-      Math.round((read / sent) * 100) +
-      "%)</small>"
-    );
+    if (n.fromEvent && sent) {
+      return (
+        '<span class="fw-medium">' +
+        U.n(read) +
+        "</span> / " +
+        U.n(sent) +
+        ' <small class="text-body-secondary">musobaqa inbox</small>'
+      );
+    }
+    if (n.fromEvent) return '<small class="text-body-secondary">musobaqa e’loni</small>';
+    return '<span class="text-body-secondary" title="Sahifa view tracking yo‘q">ko‘rish yo‘q</span>';
   }
   function renderTable() {
     var items = allItems.filter(bucket).slice().sort(function (a, b) {
@@ -214,9 +215,9 @@
           U.statCard("E'lon", U.n(c.published), "Ko'rinadi", "bx-check-circle", "success") +
           U.statCard("Qoralama", U.n(c.draft), "Yashirin", "bx-file", "warning") +
           U.statCard(
-            "O‘qildi",
+            "Musobaqa inbox",
             U.n(nRead) + (nSent ? " / " + U.n(nSent) : ""),
-            "App bildirishnoma",
+            "Faqat e’lon → event",
             "bx-envelope-open",
             "info"
           );

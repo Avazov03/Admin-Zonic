@@ -16,13 +16,13 @@
       '<div class="card">' +
       '<div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-3">' +
       '<div><h5 class="card-title mb-1">Musobaqalar</h5>' +
-      '<p class="mb-0 text-body-secondary small">Ishtirokchilar + app bildirishnoma o‘qilishi</p></div>' +
+      '<p class="mb-0 text-body-secondary small">Qo‘shilgan = ishtirokchi. App o‘qigan = ilova inboxida ochilgan (FCM open emas)</p></div>' +
       '<button type="button" class="btn btn-primary" id="z-new">Yangi musobaqa</button></div>' +
       '<div id="z-alert" class="px-6 pt-4"></div>' +
       '<div class="card-body pt-0">' +
       '<ul class="nav nav-pills mb-4 flex-wrap gap-1" id="z-filters" role="tablist"></ul>' +
       '<div class="table-responsive"><table class="table table-hover">' +
-      "<thead><tr><th>Nomi</th><th>Maqsad</th><th>Muddat</th><th>Ishtirokchi</th><th>Bildirishnoma</th><th>Holat</th><th></th></tr></thead>" +
+      "<thead><tr><th>Nomi</th><th>Maqsad</th><th>Muddat</th><th>Qo‘shilgan</th><th>App o‘qigan</th><th>Holat</th><th></th></tr></thead>" +
       '<tbody id="z-body"></tbody></table></div></div></div>' +
       formModal() +
       partsModal();
@@ -181,16 +181,16 @@
   function notifCell(ev) {
     var sent = Number(ev.notifSent || 0);
     var read = Number(ev.notifRead || 0);
-    if (!sent) return '<span class="text-body-secondary">—</span>';
+    if (!sent) return '<span class="text-body-secondary">yuborilmagan</span>';
     var pct = Math.round((read / sent) * 100);
     return (
       '<span class="fw-medium">' +
       U.n(read) +
       "</span> / " +
       U.n(sent) +
-      ' <small class="text-body-secondary">(' +
+      ' <small class="text-body-secondary">inbox (' +
       pct +
-      "% o‘qildi)</small>"
+      "%)</small>"
     );
   }
   function renderTable() {
@@ -269,7 +269,7 @@
           U.statCard("Aktiv", U.n(c.active), "Hozir", "bx-play-circle", "success") +
           U.statCard("Ishtirokchilar", U.n(parts), "Qo‘shilgan", "bx-group", "info") +
           U.statCard(
-            "O‘qilgan",
+            "Inbox o‘qigan",
             U.n(nRead) + (nSent ? " / " + U.n(nSent) : ""),
             "App bildirishnoma",
             "bx-envelope-open",
