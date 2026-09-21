@@ -66,6 +66,15 @@ export class PageQueryDto {
   pageSize?: number;
 }
 
+export class NotificationsQueryDto {
+  @ApiPropertyOptional({ example: 20, description: 'Max items (1–50)' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  limit?: number;
+}
+
 export class AdminUsersQueryDto extends PageQueryDto {
   @ApiPropertyOptional({ description: 'username / email / phone / zonicId' })
   @IsOptional()

@@ -705,6 +705,84 @@ export class AdminService {
     };
   }
 
+  /** Navbar notification feed — recent users, events, news, push campaigns. */
+  async notifications(limit = 20) {
+    const lim = Math.min(50, Math.max(1, Number(limit) || 20));
+    const rows = await this.db.query(
+      `SELECT type, raw_id, title, body, created_at, avatar_file_id FROM (
+         (
+           SELECT 'user'::text AS type, u.id::text AS raw_id, u.username AS title,
+                  'Yangi foydalanuvchi qo‘shildi'::text AS body,
+                  u.dateofcreated AS created_at, u.avatar_file_id::text AS avatar_file_id
+             FROM sys_user u
+            WHERE u.dateofcreated >= now() - interval '14 days'
+              AND COALESCE(u.is_admin, false) = false
+            ORDER BY u.dateofcreated DESC
+            LIMIT 30
+         )
+         UNION ALL
+         (
+           SELECT 'event'::text, e.id::text, e.title,
+                  CASE e.status
+                    WHEN 'published' THEN 'Musobaqa e’lon qilindi'
+                    ELSE 'Musobaqa yaratildi (' || e.status || ')'
+                  END,
+                  e.created_at, NULL::text
+             FROM game_event e
+            WHERE e.created_at >= now() - interval '14 days'
+            ORDER BY e.created_at DESC
+            LIMIT 30
+         )
+         UNION ALL
+         (
+           SELECT 'news'::text, n.id::text, n.title,
+                  CASE WHEN n.is_published THEN 'Yangilik chop etildi' ELSE 'Yangilik qoralama' END,
+                  COALESCE(n.published_at, n.created_at), NULL::text
+             FROM game_news n
+            WHERE COALESCE(n.published_at, n.created_at) >= now() - interval '14 days'
+            ORDER BY COALESCE(n.published_at, n.created_at) DESC
+            LIMIT 30
+         )
+         UNION ALL
+         (
+           SELECT 'push'::text, p.id::text, p.title,
+                  COALESCE(NULLIF(TRIM(p.body), ''), 'Push yuborildi') ||
+                    ' · ' || COALESCE(p.sent_count, 0)::text || ' ta',
+                  p.created_at, NULL::text
+             FROM admin_push_campaign p
+            WHERE p.created_at >= now() - interval '14 days'
+            ORDER BY p.created_at DESC
+            LIMIT 30
+         )
+       ) feed
+       ORDER BY created_at DESC
+       LIMIT $1`,
+      [lim],
+    );
+
+    const hrefByType: Record<string, string> = {
+      user: 'app-user-list.html',
+      event: 'app-zon-events.html',
+      news: 'app-zon-news.html',
+      push: 'app-zon-push.html',
+    };
+
+    const items = (rows as Array<Record<string, unknown>>).map((r) => {
+      const type = String(r.type);
+      return {
+        id: `${type}:${r.raw_id}`,
+        type,
+        title: String(r.title || ''),
+        body: String(r.body || ''),
+        createdAt: formatIso(new Date(r.created_at as Date)),
+        href: hrefByType[type] || 'index.html',
+        avatarFileId: (r.avatar_file_id as string) || null,
+      };
+    });
+
+    return { unreadHint: items.length, items };
+  }
+
   // ─── Badges ──────────────────────────────────────────────────────────────
   async listBadges() {
     const rows = await this.db.query(

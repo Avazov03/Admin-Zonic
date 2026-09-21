@@ -1528,180 +1528,19 @@
             <div class="dropdown-header d-flex align-items-center py-3">
               <h6 class="mb-0 me-auto" data-zon-i18n="notif.title">Notification</h6>
               <div class="d-flex align-items-center h6 mb-0">
-                <span class="badge bg-label-primary me-2" data-zon-i18n="notif.new">8 New</span>
+                <span class="badge bg-label-primary me-2" data-zon-i18n="notif.new" style="display:none">0 yangi</span>
                 <a href="javascript:void(0)" class="dropdown-notifications-all p-2" data-bs-toggle="tooltip" data-bs-placement="top" data-zon-i18n-title="notif.markAll" title="Mark all as read"><i class="icon-base bx bx-envelope-open text-heading"></i></a>
               </div>
             </div>
           </li>
-          <li class="dropdown-notifications-list scrollable-container">
+                    <li class="dropdown-notifications-list scrollable-container">
             <ul class="list-group list-group-flush">
-              <li class="list-group-item list-group-item-action dropdown-notifications-item">
-                <div class="d-flex">
-                  <div class="flex-shrink-0 me-3">
-                    <div class="avatar">
-                      <img src="assets/img/avatars/1.png" alt class="rounded-circle" />
-                    </div>
-                  </div>
-                  <div class="flex-grow-1">
-                    <h6 class="small mb-0" data-zon-i18n="notif.1.title">Congratulation Lettie 🎉</h6>
-                    <small class="mb-1 d-block text-body" data-zon-i18n="notif.1.body">Won the monthly best seller gold badge</small>
-                    <small class="text-body-secondary" data-zon-i18n="notif.1.time">1h ago</small>
-                  </div>
-                  <div class="flex-shrink-0 dropdown-notifications-actions">
-                    <a href="javascript:void(0)" class="dropdown-notifications-read"><span class="badge badge-dot"></span></a>
-                    <a href="javascript:void(0)" class="dropdown-notifications-archive"><span class="icon-base bx bx-x"></span></a>
-                  </div>
-                </div>
-              </li>
-              <li class="list-group-item list-group-item-action dropdown-notifications-item">
-                <div class="d-flex">
-                  <div class="flex-shrink-0 me-3">
-                    <div class="avatar">
-                      <span class="avatar-initial rounded-circle bg-label-danger">CF</span>
-                    </div>
-                  </div>
-                  <div class="flex-grow-1">
-                    <h6 class="small mb-0" data-zon-i18n="notif.2.title">Charles Franklin</h6>
-                    <small class="mb-1 d-block text-body" data-zon-i18n="notif.2.body">Accepted your connection</small>
-                    <small class="text-body-secondary" data-zon-i18n="notif.2.time">12hr ago</small>
-                  </div>
-                  <div class="flex-shrink-0 dropdown-notifications-actions">
-                    <a href="javascript:void(0)" class="dropdown-notifications-read"><span class="badge badge-dot"></span></a>
-                    <a href="javascript:void(0)" class="dropdown-notifications-archive"><span class="icon-base bx bx-x"></span></a>
-                  </div>
-                </div>
-              </li>
-              <li class="list-group-item list-group-item-action dropdown-notifications-item marked-as-read">
-                <div class="d-flex">
-                  <div class="flex-shrink-0 me-3">
-                    <div class="avatar">
-                      <img src="assets/img/avatars/2.png" alt class="rounded-circle" />
-                    </div>
-                  </div>
-                  <div class="flex-grow-1">
-                    <h6 class="small mb-0" data-zon-i18n="notif.3.title">New Message ✉️</h6>
-                    <small class="mb-1 d-block text-body" data-zon-i18n="notif.3.body">You have new message from Natalie</small>
-                    <small class="text-body-secondary" data-zon-i18n="notif.3.time">1h ago</small>
-                  </div>
-                  <div class="flex-shrink-0 dropdown-notifications-actions">
-                    <a href="javascript:void(0)" class="dropdown-notifications-read"><span class="badge badge-dot"></span></a>
-                    <a href="javascript:void(0)" class="dropdown-notifications-archive"><span class="icon-base bx bx-x"></span></a>
-                  </div>
-                </div>
-              </li>
-              <li class="list-group-item list-group-item-action dropdown-notifications-item">
-                <div class="d-flex">
-                  <div class="flex-shrink-0 me-3">
-                    <div class="avatar">
-                      <span class="avatar-initial rounded-circle bg-label-success"><i class="icon-base bx bx-cart"></i></span>
-                    </div>
-                  </div>
-                  <div class="flex-grow-1">
-                    <h6 class="small mb-0" data-zon-i18n="notif.4.title">Whoo! You have new order 🛒</h6>
-                    <small class="mb-1 d-block text-body" data-zon-i18n="notif.4.body">ACME Inc. made new order $1,154</small>
-                    <small class="text-body-secondary" data-zon-i18n="notif.4.time">1 day ago</small>
-                  </div>
-                  <div class="flex-shrink-0 dropdown-notifications-actions">
-                    <a href="javascript:void(0)" class="dropdown-notifications-read"><span class="badge badge-dot"></span></a>
-                    <a href="javascript:void(0)" class="dropdown-notifications-archive"><span class="icon-base bx bx-x"></span></a>
-                  </div>
-                </div>
-              </li>
-              <li class="list-group-item list-group-item-action dropdown-notifications-item marked-as-read">
-                <div class="d-flex">
-                  <div class="flex-shrink-0 me-3">
-                    <div class="avatar">
-                      <img src="assets/img/avatars/9.png" alt class="rounded-circle" />
-                    </div>
-                  </div>
-                  <div class="flex-grow-1">
-                    <h6 class="small mb-0" data-zon-i18n="notif.5.title">Application has been approved 🚀</h6>
-                    <small class="mb-1 d-block text-body" data-zon-i18n="notif.5.body">Your ABC project application has been approved.</small>
-                    <small class="text-body-secondary" data-zon-i18n="notif.5.time">2 days ago</small>
-                  </div>
-                  <div class="flex-shrink-0 dropdown-notifications-actions">
-                    <a href="javascript:void(0)" class="dropdown-notifications-read"><span class="badge badge-dot"></span></a>
-                    <a href="javascript:void(0)" class="dropdown-notifications-archive"><span class="icon-base bx bx-x"></span></a>
-                  </div>
-                </div>
-              </li>
-              <li class="list-group-item list-group-item-action dropdown-notifications-item marked-as-read">
-                <div class="d-flex">
-                  <div class="flex-shrink-0 me-3">
-                    <div class="avatar">
-                      <span class="avatar-initial rounded-circle bg-label-success"><i class="icon-base bx bx-pie-chart-alt"></i></span>
-                    </div>
-                  </div>
-                  <div class="flex-grow-1">
-                    <h6 class="small mb-0" data-zon-i18n="notif.6.title">Monthly report is generated</h6>
-                    <small class="mb-1 d-block text-body" data-zon-i18n="notif.6.body">July monthly financial report is generated</small>
-                    <small class="text-body-secondary" data-zon-i18n="notif.6.time">3 days ago</small>
-                  </div>
-                  <div class="flex-shrink-0 dropdown-notifications-actions">
-                    <a href="javascript:void(0)" class="dropdown-notifications-read"><span class="badge badge-dot"></span></a>
-                    <a href="javascript:void(0)" class="dropdown-notifications-archive"><span class="icon-base bx bx-x"></span></a>
-                  </div>
-                </div>
-              </li>
-              <li class="list-group-item list-group-item-action dropdown-notifications-item marked-as-read">
-                <div class="d-flex">
-                  <div class="flex-shrink-0 me-3">
-                    <div class="avatar">
-                      <img src="assets/img/avatars/5.png" alt class="rounded-circle" />
-                    </div>
-                  </div>
-                  <div class="flex-grow-1">
-                    <h6 class="small mb-0" data-zon-i18n="notif.7.title">Send connection request</h6>
-                    <small class="mb-1 d-block text-body" data-zon-i18n="notif.7.body">Peter sent you connection request</small>
-                    <small class="text-body-secondary" data-zon-i18n="notif.7.time">4 days ago</small>
-                  </div>
-                  <div class="flex-shrink-0 dropdown-notifications-actions">
-                    <a href="javascript:void(0)" class="dropdown-notifications-read"><span class="badge badge-dot"></span></a>
-                    <a href="javascript:void(0)" class="dropdown-notifications-archive"><span class="icon-base bx bx-x"></span></a>
-                  </div>
-                </div>
-              </li>
-              <li class="list-group-item list-group-item-action dropdown-notifications-item">
-                <div class="d-flex">
-                  <div class="flex-shrink-0 me-3">
-                    <div class="avatar">
-                      <img src="assets/img/avatars/6.png" alt class="rounded-circle" />
-                    </div>
-                  </div>
-                  <div class="flex-grow-1">
-                    <h6 class="small mb-0" data-zon-i18n="notif.8.title">New message from Jane</h6>
-                    <small class="mb-1 d-block text-body" data-zon-i18n="notif.8.body">You have new message from Jane</small>
-                    <small class="text-body-secondary" data-zon-i18n="notif.8.time">5 days ago</small>
-                  </div>
-                  <div class="flex-shrink-0 dropdown-notifications-actions">
-                    <a href="javascript:void(0)" class="dropdown-notifications-read"><span class="badge badge-dot"></span></a>
-                    <a href="javascript:void(0)" class="dropdown-notifications-archive"><span class="icon-base bx bx-x"></span></a>
-                  </div>
-                </div>
-              </li>
-              <li class="list-group-item list-group-item-action dropdown-notifications-item marked-as-read">
-                <div class="d-flex">
-                  <div class="flex-shrink-0 me-3">
-                    <div class="avatar">
-                      <span class="avatar-initial rounded-circle bg-label-warning"><i class="icon-base bx bx-error"></i></span>
-                    </div>
-                  </div>
-                  <div class="flex-grow-1">
-                    <h6 class="small mb-0" data-zon-i18n="notif.9.title">CPU is running high</h6>
-                    <small class="mb-1 d-block text-body" data-zon-i18n="notif.9.body">CPU Utilization Percent is currently at 88.63%</small>
-                    <small class="text-body-secondary" data-zon-i18n="notif.9.time">5 days ago</small>
-                  </div>
-                  <div class="flex-shrink-0 dropdown-notifications-actions">
-                    <a href="javascript:void(0)" class="dropdown-notifications-read"><span class="badge badge-dot"></span></a>
-                    <a href="javascript:void(0)" class="dropdown-notifications-archive"><span class="icon-base bx bx-x"></span></a>
-                  </div>
-                </div>
-              </li>
+              <li class="list-group-item text-center text-body-secondary py-4">Yuklanmoqda…</li>
             </ul>
           </li>
-          <li class="border-top">
+<li class="border-top">
             <div class="d-grid p-4">
-              <a class="btn btn-primary btn-sm d-flex" href="javascript:void(0);">
+              <a class="btn btn-primary btn-sm d-flex" href="app-zon-push.html">
                 <small class="align-middle" data-zon-i18n="notif.viewAll">View all notifications</small>
               </a>
             </div>

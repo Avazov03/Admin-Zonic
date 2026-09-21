@@ -94,7 +94,248 @@
 
   /** Demo billing/pricing — faqat user dropdown tozalanadi; boshqa navbar keyinroq. */
   function cleanTemplateChrome() {
-    // Til, theme, shortcuts, notifications — hozircha tegilmaydi
+    // Til, theme, shortcuts — hozircha tegilmaydi; notifications setupNotifications() da
+  }
+
+  function notifStorageKey(kind, username) {
+    return "zon.notif." + kind + "." + String(username || "admin");
+  }
+
+  function loadIdSet(key) {
+    try {
+      var raw = localStorage.getItem(key);
+      var arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function saveIdSet(key, arr) {
+    try {
+      localStorage.setItem(key, JSON.stringify(arr.slice(0, 200)));
+    } catch (_) {}
+  }
+
+  function relativeTime(iso) {
+    var t = Date.parse(iso);
+    if (!Number.isFinite(t)) return "";
+    var sec = Math.max(0, Math.round((Date.now() - t) / 1000));
+    if (sec < 60) return "hozir";
+    var min = Math.round(sec / 60);
+    if (min < 60) return min + " daqiqa oldin";
+    var hr = Math.round(min / 60);
+    if (hr < 48) return hr + " soat oldin";
+    var day = Math.round(hr / 24);
+    return day + " kun oldin";
+  }
+
+  function notifIcon(type) {
+    if (type === "user") return { cls: "bg-label-primary", icon: "bx-user" };
+    if (type === "event") return { cls: "bg-label-success", icon: "bx-calendar-event" };
+    if (type === "news") return { cls: "bg-label-info", icon: "bx-news" };
+    if (type === "push") return { cls: "bg-label-warning", icon: "bx-bell" };
+    return { cls: "bg-label-secondary", icon: "bx-info-circle" };
+  }
+
+  function esc(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function setupNotifications(username) {
+    var root = document.querySelector(".dropdown-notifications");
+    if (!root || root.getAttribute("data-zon-notif") === "1") return;
+    root.setAttribute("data-zon-notif", "1");
+
+    var listUl = root.querySelector(".dropdown-notifications-list .list-group");
+    if (!listUl) return;
+    listUl.innerHTML =
+      '<li class="list-group-item text-center text-body-secondary py-4" data-zon-notif-empty>Yuklanmoqda…</li>';
+
+    var badgeNew = root.querySelector(".dropdown-menu-header .badge.bg-label-primary");
+    var badgeDot = root.querySelector(".badge-notifications");
+    var markAll = root.querySelector(".dropdown-notifications-all");
+    var viewAll = root.querySelector(".border-top a.btn");
+    if (viewAll) {
+      viewAll.setAttribute("href", "app-zon-push.html");
+      var viewLabel = viewAll.querySelector("small");
+      if (viewLabel) {
+        viewLabel.removeAttribute("data-zon-i18n");
+        viewLabel.textContent = "Push tarixi";
+      }
+    }
+
+    var uname = username || "admin";
+    var readKey = notifStorageKey("read", uname);
+    var archKey = notifStorageKey("archived", uname);
+    var items = [];
+
+    function isArchived(id) {
+      return loadIdSet(archKey).indexOf(id) >= 0;
+    }
+    function isRead(id) {
+      return loadIdSet(readKey).indexOf(id) >= 0;
+    }
+    function markRead(id) {
+      var arr = loadIdSet(readKey);
+      if (arr.indexOf(id) < 0) {
+        arr.push(id);
+        saveIdSet(readKey, arr);
+      }
+    }
+    function archive(id) {
+      var arr = loadIdSet(archKey);
+      if (arr.indexOf(id) < 0) {
+        arr.push(id);
+        saveIdSet(archKey, arr);
+      }
+      markRead(id);
+    }
+
+    function visibleItems() {
+      return items.filter(function (it) {
+        return !isArchived(it.id);
+      });
+    }
+
+    function unreadCount() {
+      return visibleItems().filter(function (it) {
+        return !isRead(it.id);
+      }).length;
+    }
+
+    function paintBadge() {
+      var n = unreadCount();
+      if (badgeNew) {
+        badgeNew.textContent = n ? n + " yangi" : "";
+        badgeNew.style.display = n ? "" : "none";
+        badgeNew.removeAttribute("data-zon-i18n");
+      }
+      if (badgeDot) badgeDot.style.display = n ? "" : "none";
+    }
+
+    function avatarHtml(it) {
+      var meta = notifIcon(it.type);
+      if (it.type === "user" && it.avatarFileId && window.ZonUI && ZonUI.userAvatarHtml) {
+        return ZonUI.userAvatarHtml(it.avatarFileId, it.title, 40);
+      }
+      if (it.type === "user") {
+        var letter = String(it.title || "?").charAt(0).toUpperCase();
+        return (
+          '<span class="avatar-initial rounded-circle ' +
+          meta.cls +
+          '">' +
+          esc(letter) +
+          "</span>"
+        );
+      }
+      return (
+        '<span class="avatar-initial rounded-circle ' +
+        meta.cls +
+        '"><i class="icon-base bx ' +
+        meta.icon +
+        '"></i></span>'
+      );
+    }
+
+    function render() {
+      var vis = visibleItems();
+      if (!vis.length) {
+        listUl.innerHTML =
+          '<li class="list-group-item text-center text-body-secondary py-4">Bildirishnoma yo‘q</li>';
+        paintBadge();
+        return;
+      }
+      listUl.innerHTML = vis
+        .map(function (it) {
+          var read = isRead(it.id);
+          return (
+            '<li class="list-group-item list-group-item-action dropdown-notifications-item' +
+            (read ? " marked-as-read" : "") +
+            '" data-zon-notif-id="' +
+            esc(it.id) +
+            '">' +
+            '<a href="' +
+            esc(it.href || "#") +
+            '" class="d-flex text-body text-decoration-none">' +
+            '<div class="flex-shrink-0 me-3"><div class="avatar">' +
+            avatarHtml(it) +
+            "</div></div>" +
+            '<div class="flex-grow-1">' +
+            '<h6 class="small mb-0">' +
+            esc(it.title) +
+            "</h6>" +
+            '<small class="mb-1 d-block text-body">' +
+            esc(it.body) +
+            "</small>" +
+            '<small class="text-body-secondary">' +
+            esc(relativeTime(it.createdAt)) +
+            "</small>" +
+            "</div>" +
+            '<div class="flex-shrink-0 dropdown-notifications-actions">' +
+            (read
+              ? ""
+              : '<span class="dropdown-notifications-read"><span class="badge badge-dot"></span></span>') +
+            '<span class="dropdown-notifications-archive ms-1" role="button" title="Yashirish"><span class="icon-base bx bx-x"></span></span>' +
+            "</div></a></li>"
+          );
+        })
+        .join("");
+
+      if (window.ZonUI && ZonUI.hydrateAvatars) ZonUI.hydrateAvatars(listUl);
+      paintBadge();
+    }
+
+    listUl.addEventListener("click", function (e) {
+      var archBtn = e.target.closest(".dropdown-notifications-archive");
+      var row = e.target.closest("[data-zon-notif-id]");
+      if (!row) return;
+      var id = row.getAttribute("data-zon-notif-id");
+      if (archBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        archive(id);
+        render();
+        return;
+      }
+      markRead(id);
+      paintBadge();
+    });
+
+    if (markAll) {
+      markAll.onclick = function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var arr = loadIdSet(readKey);
+        visibleItems().forEach(function (it) {
+          if (arr.indexOf(it.id) < 0) arr.push(it.id);
+        });
+        saveIdSet(readKey, arr);
+        render();
+      };
+    }
+
+    if (!window.ZonApi || !ZonApi.get) {
+      listUl.innerHTML =
+        '<li class="list-group-item text-center text-body-secondary py-4">API yo‘q</li>';
+      paintBadge();
+      return;
+    }
+
+    ZonApi.get("/Admin/Notifications?limit=20")
+      .then(function (data) {
+        items = (data && data.items) || [];
+        render();
+      })
+      .catch(function () {
+        listUl.innerHTML =
+          '<li class="list-group-item text-center text-body-secondary py-4">Yuklanmadi</li>';
+        paintBadge();
+      });
   }
 
   function setAvatarNodes(nodes, fileId, name) {
@@ -271,6 +512,7 @@
 
     if (!window.ZonApi || !ZonApi.adminMe) {
       paint();
+      setupNotifications(state.username);
       return;
     }
     ZonApi.adminMe()
@@ -278,16 +520,21 @@
         state.username = (me && me.username) || "Admin";
         state.avatarFileId = (me && me.avatarFileId) || null;
         paint();
+        setupNotifications(state.username);
       })
       .catch(function () {
         paint();
+        setupNotifications(state.username);
       });
   }
 
   function boot() {
     splitMenu();
     cleanTemplateChrome();
-    setupNavbarUser();
+    if (!isAuth) {
+      setupNavbarUser();
+      // notifications setupNavbarUser ichida adminMe dan keyin
+    }
     bindLogout();
   }
 

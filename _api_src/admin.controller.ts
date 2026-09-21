@@ -38,6 +38,7 @@ import {
   CreateBadgeDto,
   CreateEventDto,
   CreateNewsDto,
+  NotificationsQueryDto,
   PageQueryDto,
   SendPushDto,
   UpdateBadgeDto,
@@ -192,6 +193,14 @@ export class AdminController {
   @ApiBearerAuth()
   pushHistory(@Query() q: PageQueryDto) {
     return this.admin.pushHistory(q.page ?? 1, q.pageSize ?? 20);
+  }
+
+  @Get('Notifications')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Admin navbar feed: users, events, news, push' })
+  notifications(@Query() q: NotificationsQueryDto) {
+    return this.admin.notifications(q.limit ?? 20);
   }
 
   // ─── 18 Badges ───────────────────────────────────────────────────────────
