@@ -179,7 +179,7 @@ export class AdminService {
                 (SELECT COALESCE(SUM(steps), 0) FROM game_step_activity s WHERE s.started_at::date = d)::bigint AS steps,
                 (SELECT COUNT(*) FROM game_territory t WHERE t.captured_at::date = d)::int AS territories,
                 (SELECT COUNT(*) FROM game_user_achievement a WHERE a.unlocked_at::date = d)::int AS unlocks
-           FROM generate_series(CURRENT_DATE - 6, CURRENT_DATE, interval '1 day') AS d
+           FROM generate_series(CURRENT_DATE - 29, CURRENT_DATE, interval '1 day') AS d
            ORDER BY 1`,
       ),
       // Full selected year (Jan 1 – Dec 31)
@@ -248,7 +248,7 @@ export class AdminService {
         campaigns: Number(push.campaigns),
         sentTotal: Number(push.sent_total),
       },
-      last7Days: (
+      last30Days: (
         daily as Array<{
           day: Date;
           new_users: number;
@@ -267,6 +267,28 @@ export class AdminService {
         territories: Number(r.territories),
         unlocks: Number(r.unlocks),
       })),
+      // charts still use last 7 of the 30-day series
+      last7Days: (
+        daily as Array<{
+          day: Date;
+          new_users: number;
+          runs: number;
+          km: number;
+          steps: number;
+          territories: number;
+          unlocks: number;
+        }>
+      )
+        .slice(-7)
+        .map((r) => ({
+          day: formatIso(new Date(r.day)).slice(0, 10),
+          newUsers: Number(r.new_users),
+          runs: Number(r.runs),
+          distanceKm: Number(r.km),
+          steps: Number(r.steps),
+          territories: Number(r.territories),
+          unlocks: Number(r.unlocks),
+        })),
       activityCalendar: (
         calendar as Array<{
           day: Date;
@@ -284,6 +306,129 @@ export class AdminService {
       })),
       calendarYear: y,
       availableYears,
+    };
+  }
+
+  /** Active users + run/territory events for one calendar day (YYYY-MM-DD). */
+  async dayActivity(day: string) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+      throw badRequest(['day must be YYYY-MM-DD']);
+    }
+    const [users, runs, territories] = await Promise.all([
+      this.db.query(
+        `SELECT u.id::text, u.username, u.zonic_id, u.avatar_file_id,
+                (SELECT COUNT(*)::int FROM game_free_run r WHERE r.user_id = u.id AND r.started_at::date = $1::date) AS runs_day,
+                (SELECT COALESCE(SUM(r.distance_km), 0)::float FROM game_free_run r WHERE r.user_id = u.id AND r.started_at::date = $1::date) AS km_day,
+                (SELECT COALESCE(SUM(s.steps), 0)::bigint FROM game_step_activity s WHERE s.user_id = u.id AND s.started_at::date = $1::date) AS steps_day,
+                (SELECT COUNT(*)::int FROM game_territory t WHERE t.owner_user_id = u.id AND t.captured_at::date = $1::date) AS terr_day,
+                (SELECT COALESCE(SUM(t.area_m2), 0)::float FROM game_territory t WHERE t.owner_user_id = u.id AND t.captured_at::date = $1::date) AS area_day,
+                (SELECT COUNT(*)::int FROM game_free_run r WHERE r.user_id = u.id) AS runs_total,
+                (SELECT COALESCE(SUM(r.distance_km), 0)::float FROM game_free_run r WHERE r.user_id = u.id) AS km_total,
+                (SELECT COUNT(*)::int FROM game_territory t WHERE t.owner_user_id = u.id) AS terr_total,
+                (SELECT COALESCE(SUM(t.area_m2), 0)::float FROM game_territory t WHERE t.owner_user_id = u.id) AS area_total
+           FROM sys_user u
+          WHERE EXISTS (SELECT 1 FROM game_free_run r WHERE r.user_id = u.id AND r.started_at::date = $1::date)
+             OR EXISTS (SELECT 1 FROM game_territory t WHERE t.owner_user_id = u.id AND t.captured_at::date = $1::date)
+             OR EXISTS (SELECT 1 FROM game_step_activity s WHERE s.user_id = u.id AND s.started_at::date = $1::date)
+          ORDER BY (SELECT COALESCE(SUM(r.distance_km), 0) FROM game_free_run r WHERE r.user_id = u.id AND r.started_at::date = $1::date) DESC,
+                   u.username ASC
+          LIMIT 200`,
+        [day],
+      ),
+      this.db.query(
+        `SELECT r.id::text, r.user_id::text, u.username, u.zonic_id, u.avatar_file_id,
+                r.started_at, r.ended_at, r.duration_seconds, r.distance_km, r.average_speed_kmh,
+                CASE WHEN r.route_points IS NOT NULL
+                      AND jsonb_typeof(r.route_points::jsonb) = 'array'
+                      AND jsonb_array_length(r.route_points::jsonb) > 0
+                     THEN (r.route_points::jsonb->0->>'lat')::float ELSE NULL END AS lat,
+                CASE WHEN r.route_points IS NOT NULL
+                      AND jsonb_typeof(r.route_points::jsonb) = 'array'
+                      AND jsonb_array_length(r.route_points::jsonb) > 0
+                     THEN (r.route_points::jsonb->0->>'lng')::float ELSE NULL END AS lng
+           FROM game_free_run r
+           JOIN sys_user u ON u.id = r.user_id
+          WHERE r.started_at::date = $1::date
+          ORDER BY r.started_at ASC
+          LIMIT 500`,
+        [day],
+      ),
+      this.db.query(
+        `SELECT t.id::text, t.owner_user_id::text AS user_id, u.username, u.zonic_id, u.avatar_file_id,
+                t.captured_at, t.duration_seconds, t.run_distance_m, t.area_m2, t.avg_speed_kmh,
+                ST_Y(t.centroid) AS lat, ST_X(t.centroid) AS lng,
+                c.shortname AS country_name, reg.shortname AS region_name
+           FROM game_territory t
+           JOIN sys_user u ON u.id = t.owner_user_id
+           LEFT JOIN info_country c ON c.id = u.country_id
+           LEFT JOIN info_region reg ON reg.id = u.region_id
+          WHERE t.captured_at::date = $1::date
+          ORDER BY t.captured_at ASC
+          LIMIT 500`,
+        [day],
+      ),
+    ]);
+
+    const areaKm2 = (m2: unknown) => Math.round((Number(m2) / 1_000_000) * 10000) / 10000;
+
+    return {
+      day,
+      users: (users as Array<Record<string, unknown>>).map((r) => ({
+        id: r.id,
+        username: r.username,
+        zonicId: r.zonic_id,
+        avatarFileId: r.avatar_file_id ?? null,
+        day: {
+          runs: Number(r.runs_day) || 0,
+          distanceKm: Number(r.km_day) || 0,
+          steps: Number(r.steps_day) || 0,
+          territories: Number(r.terr_day) || 0,
+          areaKm2: areaKm2(r.area_day),
+          activityCount:
+            (Number(r.runs_day) || 0) + (Number(r.terr_day) || 0) + (Number(r.steps_day) > 0 ? 1 : 0),
+        },
+        total: {
+          runs: Number(r.runs_total) || 0,
+          distanceKm: Number(r.km_total) || 0,
+          territories: Number(r.terr_total) || 0,
+          areaKm2: areaKm2(r.area_total),
+        },
+      })),
+      events: [
+        ...(runs as Array<Record<string, unknown>>).map((r) => ({
+          id: r.id,
+          kind: 'run' as const,
+          userId: r.user_id,
+          username: r.username,
+          zonicId: r.zonic_id,
+          avatarFileId: r.avatar_file_id ?? null,
+          at: formatIso(new Date(r.started_at as Date)),
+          endedAt: r.ended_at ? formatIso(new Date(r.ended_at as Date)) : null,
+          durationSeconds: Number(r.duration_seconds) || 0,
+          distanceKm: Number(r.distance_km) || 0,
+          averageSpeedKmh: Number(r.average_speed_kmh) || 0,
+          lat: r.lat != null ? Number(r.lat) : null,
+          lng: r.lng != null ? Number(r.lng) : null,
+          place: null as string | null,
+        })),
+        ...(territories as Array<Record<string, unknown>>).map((r) => ({
+          id: r.id,
+          kind: 'territory' as const,
+          userId: r.user_id,
+          username: r.username,
+          zonicId: r.zonic_id,
+          avatarFileId: r.avatar_file_id ?? null,
+          at: formatIso(new Date(r.captured_at as Date)),
+          endedAt: null as string | null,
+          durationSeconds: Number(r.duration_seconds) || 0,
+          distanceKm: Math.round((Number(r.run_distance_m) / 1000) * 1000) / 1000,
+          areaKm2: areaKm2(r.area_m2),
+          averageSpeedKmh: Number(r.avg_speed_kmh) || 0,
+          lat: r.lat != null ? Number(r.lat) : null,
+          lng: r.lng != null ? Number(r.lng) : null,
+          place: [r.region_name, r.country_name].filter(Boolean).join(', ') || null,
+        })),
+      ].sort((a, b) => String(a.at).localeCompare(String(b.at))),
     };
   }
 

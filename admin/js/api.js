@@ -162,6 +162,8 @@
       const q = y && isFinite(y) ? "?year=" + encodeURIComponent(String(y)) : "";
       return request("/Admin/Dashboard" + q, { method: "GET" });
     },
+    adminDayActivity: (day) =>
+      request("/Admin/Dashboard/DayActivity?day=" + encodeURIComponent(day), { method: "GET" }),
 
     logout: () => {
       setToken("");

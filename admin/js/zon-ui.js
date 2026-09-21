@@ -86,13 +86,15 @@
       );
     }
     return (
-      '<span class="avatar zon-user-avatar flex-shrink-0" data-avatar-file="' +
+      '<span class="avatar zon-user-avatar zon-avatar-zoom flex-shrink-0" role="button" tabindex="0" title="Rasmni kattalashtirish" data-avatar-file="' +
       esc(fileId) +
+      '" data-avatar-name="' +
+      esc(name || "") +
       '" style="width:' +
       sizePx +
       "px;height:" +
       sizePx +
-      'px">' +
+      'px;cursor:pointer">' +
       ph +
       "</span>"
     );
@@ -122,7 +124,69 @@
       });
   }
 
+  function ensureAvatarModal() {
+    if (document.getElementById("zonAvatarModal")) return;
+    var wrap = document.createElement("div");
+    wrap.innerHTML =
+      '<div class="modal fade" id="zonAvatarModal" tabindex="-1" aria-hidden="true">' +
+      '<div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content">' +
+      '<div class="modal-header border-0 pb-0">' +
+      '<h5 class="modal-title" id="zonAvatarModalTitle">Profil rasmi</h5>' +
+      '<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Yopish"></button></div>' +
+      '<div class="modal-body text-center pt-2">' +
+      '<div id="zonAvatarModalBody" class="zon-avatar-modal-body mx-auto"></div>' +
+      '<p class="text-body-secondary small mt-3 mb-0" id="zonAvatarModalSub"></p>' +
+      "</div></div></div></div>";
+    document.body.appendChild(wrap.firstChild);
+  }
+
+  function openAvatarModal(fileId, name) {
+    if (!fileId) return;
+    ensureAvatarModal();
+    var title = document.getElementById("zonAvatarModalTitle");
+    var sub = document.getElementById("zonAvatarModalSub");
+    var body = document.getElementById("zonAvatarModalBody");
+    if (title) title.textContent = name ? String(name) : "Profil rasmi";
+    if (sub) sub.textContent = name ? "@" + String(name) : "";
+    if (body) {
+      body.innerHTML =
+        '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">…</span></div>';
+    }
+    modalShow("zonAvatarModal");
+    loadAvatarBlob(fileId).then(function (url) {
+      if (!body || !body.isConnected) return;
+      if (!url) {
+        body.innerHTML = '<span class="text-body-secondary">Rasm yuklanmadi</span>';
+        return;
+      }
+      body.innerHTML =
+        '<img src="' +
+        url +
+        '" alt="" class="rounded-circle zon-avatar-modal-img" width="220" height="220" />';
+    });
+  }
+
+  function bindAvatarZoom() {
+    if (document.documentElement.getAttribute("data-zon-avatar-zoom") === "1") return;
+    document.documentElement.setAttribute("data-zon-avatar-zoom", "1");
+    document.addEventListener("click", function (e) {
+      var el = e.target && e.target.closest ? e.target.closest(".zon-avatar-zoom[data-avatar-file]") : null;
+      if (!el) return;
+      e.preventDefault();
+      e.stopPropagation();
+      openAvatarModal(el.getAttribute("data-avatar-file"), el.getAttribute("data-avatar-name"));
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      var el = e.target && e.target.closest ? e.target.closest(".zon-avatar-zoom[data-avatar-file]") : null;
+      if (!el) return;
+      e.preventDefault();
+      openAvatarModal(el.getAttribute("data-avatar-file"), el.getAttribute("data-avatar-name"));
+    });
+  }
+
   function hydrateAvatars(scope) {
+    bindAvatarZoom();
     var rootEl = scope || document;
     var nodes = rootEl.querySelectorAll
       ? rootEl.querySelectorAll("[data-avatar-file]")
@@ -142,6 +206,7 @@
         img.style.height = "100%";
         img.style.objectFit = "cover";
         img.style.display = "block";
+        img.style.pointerEvents = "none";
         el.innerHTML = "";
         el.appendChild(img);
       });
@@ -284,5 +349,6 @@
     enhanceSelect: enhanceSelect,
     setSelectValue: setSelectValue,
     enhanceSelectsIn: enhanceSelectsIn,
+    openAvatarModal: openAvatarModal,
   };
 })(window);

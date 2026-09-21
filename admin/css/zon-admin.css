@@ -326,3 +326,23 @@ div[class*="buy-now"] {
 @media (max-width: 767.98px) {
   .zon-heat-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* Avatar zoom modal */
+.zon-avatar-zoom:hover { outline: 2px solid rgba(105, 108, 255, 0.45); outline-offset: 2px; }
+.zon-avatar-modal-body { width: 220px; height: 220px; display: flex; align-items: center; justify-content: center; }
+.zon-avatar-modal-img { object-fit: cover; box-shadow: 0 0.5rem 1.5rem rgba(34, 48, 62, 0.18); }
+
+/* 30-day accordion table */
+.zon-day-row { cursor: pointer; }
+.zon-day-row.is-quiet { opacity: 0.72; }
+.zon-day-row.is-open { background: color-mix(in sRGB, var(--bs-primary) 6%, transparent); }
+.zon-day-panel td { background: color-mix(in sRGB, var(--bs-heading-color, #5d596c) 3%, transparent); border-top: 0 !important; }
+.zon-day-panel-inner { padding: 0.35rem 0.25rem 0.75rem; }
+.zon-day-metrics {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 12rem;
+  font-size: 0.8125rem;
+}
+.zon-day-metrics span { display: block; font-size: 0.6875rem; }
+.zon-day-user .avatar { flex-shrink: 0; }

@@ -94,6 +94,14 @@ export class AdminController {
     return this.admin.dashboard(Number.isFinite(y as number) ? (y as number) : undefined);
   }
 
+  @Get('Dashboard/DayActivity')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Active users + run/territory events for one day' })
+  dayActivity(@Query('day') day: string) {
+    return this.admin.dayActivity(day);
+  }
+
   // ─── 15 Users ────────────────────────────────────────────────────────────
   @Get('Users')
   @UseGuards(AdminAuthGuard)
