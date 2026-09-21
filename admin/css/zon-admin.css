@@ -1,0 +1,216 @@
+/* Zon Admin — demo/reklama qoldiqlarini yashirish */
+.buy-now,
+.btn-buy-now,
+.template-customizer,
+.template-customizer-open-btn,
+div[class*="buy-now"] {
+  display: none !important;
+}
+
+/* Brand tweaks */
+.app-brand-text {
+  letter-spacing: 0.02em;
+}
+
+/* Zahira katalog — xira, qizil konturli belgi. Butun menyu qizil emas. */
+.menu-inner > .zon-zahira-item > .menu-link,
+.menu-inner > .zon-zahira-item > .menu-header-text,
+.menu-inner > .zon-zahira-item .menu-header-text {
+  opacity: 0.55;
+}
+.menu-inner > .zon-zahira-head .menu-header-text {
+  color: #ff3e1d;
+  opacity: 1;
+}
+.zon-zahira-badge {
+  margin-left: auto;
+  font-size: 0.625rem;
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #ff3e1d;
+  border: 1px solid #ff3e1d;
+  border-radius: 10rem;
+  padding: 0.1rem 0.45rem;
+  background: transparent;
+}
+.menu-inner > .zon-work-item > .menu-link {
+  font-weight: 600;
+}
+
+/* Yugurishlar: sessiyalar uzun. Tafsilot+xarita JS bilan pin (Sneat
+   .layout-wrapper overflow:hidden CSS sticky’ni o‘chiradi). */
+.zon-runs-sticky-spacer {
+  height: 0;
+  pointer-events: none;
+}
+.zon-user-avatar {
+  display: inline-flex;
+  overflow: hidden;
+  border-radius: 50%;
+  vertical-align: middle;
+  background: var(--bs-gray-100, #e9eaec);
+}
+
+/* Silliq ochilish / yopilish (accordion, filter slotlar) */
+.zon-reveal {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows 0.38s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.28s ease;
+}
+.zon-reveal.is-shown {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.zon-reveal > .zon-reveal-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+.zon-user-detail > td {
+  padding: 0 !important;
+  border-bottom-width: 0;
+  background: var(--bs-gray-25, #fbfbfb);
+}
+.zon-user-detail .zon-reveal {
+  /* table cell ichida */
+}
+.zon-user-detail.is-open > td {
+  border-bottom-width: 1px;
+}
+.zon-user-row {
+  transition: background-color 0.2s ease;
+}
+.zon-user-row .bx-chevron-down,
+.zon-user-row .bx-chevron-up {
+  transition: transform 0.28s ease;
+  display: inline-block;
+}
+.zon-user-accordion {
+  padding: 1.25rem 1.5rem 1.5rem;
+}
+.zon-user-accordion .form-control.bg-lighter {
+  min-height: 2.5rem;
+  display: flex;
+  align-items: center;
+}
+
+/* Xarita filter maydonlari */
+.zon-filter-slot.zon-reveal.is-shown {
+  margin-bottom: 0;
+}
+
+/* Select2 — silliq ochilish */
+.zon-filter-slot .select2-container,
+.zon-enhanced-select + .select2-container {
+  width: 100% !important;
+}
+.zon-select2-dropdown {
+  border: 0 !important;
+  border-radius: 0.5rem !important;
+  box-shadow: 0 0.5rem 1.25rem rgba(34, 48, 62, 0.16) !important;
+  overflow: hidden;
+  z-index: 2000 !important;
+  transform-origin: top center;
+  animation: zonSelectIn 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes zonSelectIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scaleY(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+  }
+}
+.select2-container--default .select2-results__option--highlighted.select2-results__option--selectable {
+  background-color: #696cff;
+}
+.select2-container--default .select2-selection--single {
+  height: 2.714rem;
+  border-radius: 0.375rem;
+  border-color: color-mix(in sRGB, var(--bs-base-color, #22303e) 22%, var(--bs-paper-bg, #fff));
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.select2-container--default .select2-selection--single .select2-selection__rendered {
+  line-height: 2.6rem;
+  padding-inline-start: 0.9375rem;
+  color: var(--bs-heading-color, #384551);
+}
+.select2-container--default .select2-selection--single .select2-selection__arrow {
+  height: 2.6rem;
+}
+.select2-container--open .select2-selection--single {
+  border-color: #696cff !important;
+  box-shadow: 0 0 0 0.15rem rgba(105, 108, 255, 0.16);
+}
+.select2-search--dropdown .select2-search__field {
+  border-radius: 0.375rem;
+  padding: 0.45rem 0.75rem;
+}
+.select2-results__options {
+  max-height: 280px;
+}
+
+@media (min-width: 992px) {
+  .zon-runs-sticky.is-pinned,
+  .zon-runs-sticky.is-pinned-end {
+    will-change: transform;
+  }
+}
+
+/* Xarita — user pin (avatar + ism) */
+.zon-map-pin-wrap {
+  background: transparent !important;
+  border: 0 !important;
+}
+.zon-map-pin {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.18rem 0.65rem 0.18rem 0.18rem;
+  background: #fff;
+  border-radius: 999px;
+  box-shadow: 0 0.35rem 1rem rgba(34, 48, 62, 0.18);
+  border: 2px solid var(--pin-accent, #696cff);
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+  pointer-events: auto;
+  max-width: 220px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.zon-map-pin.is-focus {
+  transform: translate(-50%, -50%) scale(1.08);
+  box-shadow: 0 0.5rem 1.25rem rgba(255, 62, 29, 0.28);
+  border-color: #ff3e1d;
+}
+.zon-map-pin .zon-user-avatar {
+  width: 28px !important;
+  height: 28px !important;
+  flex-shrink: 0;
+}
+.zon-map-pin-name {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #384551;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.zon-map-popup .leaflet-popup-content {
+  margin: 0.75rem 1rem;
+}
+
+/* Badge ikonka preview */
+.zon-badge-thumb {
+  display: inline-block;
+  vertical-align: middle;
+  background: var(--bs-gray-100, #e9eaec);
+}
+.zon-badge-thumb--empty {
+  color: #8592a3;
+  font-size: 1.15rem;
+}
