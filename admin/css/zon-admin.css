@@ -358,3 +358,16 @@ div[class*="buy-now"] {
   width: 40px !important;
   height: 40px !important;
 }
+
+.dropdown-user .avatar,
+.dropdown-user .avatar.avatar-online {
+  overflow: hidden;
+}
+.dropdown-user .avatar img,
+.dropdown-user .avatar .zon-user-avatar,
+.dropdown-user .avatar .zon-user-avatar img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
+  display: block;
+}

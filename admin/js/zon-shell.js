@@ -101,19 +101,54 @@
     Array.prototype.forEach.call(nodes, function (box) {
       if (!box) return;
       box.innerHTML = "";
+      var letter = String(name || "A").charAt(0).toUpperCase();
       if (window.ZonUI && ZonUI.userAvatarHtml) {
-        box.innerHTML = ZonUI.userAvatarHtml(fileId, name, box.classList.contains("avatar-online") ? 40 : 38);
+        box.innerHTML = ZonUI.userAvatarHtml(fileId, name, 40);
         var inner = box.querySelector(".zon-user-avatar");
         if (inner) {
           inner.style.width = "100%";
           inner.style.height = "100%";
+          // navbar zoom click ochmasin — dropdown ochilsin
+          inner.classList.remove("zon-avatar-zoom");
+          inner.removeAttribute("role");
         }
         if (ZonUI.hydrateAvatars) ZonUI.hydrateAvatars(box);
-      } else {
-        var letter = String(name || "A").charAt(0).toUpperCase();
-        box.innerHTML =
-          '<span class="avatar-initial rounded-circle bg-label-primary">' + letter + "</span>";
+        return;
       }
+      // Fallback (zon-ui yo'q sahifalar)
+      if (!fileId || !window.ZonApi) {
+        box.innerHTML =
+          '<span class="avatar-initial rounded-circle bg-label-primary d-flex align-items-center justify-content-center w-100 h-100">' +
+          letter +
+          "</span>";
+        return;
+      }
+      box.innerHTML =
+        '<span class="avatar-initial rounded-circle bg-label-primary d-flex align-items-center justify-content-center w-100 h-100">' +
+        letter +
+        "</span>";
+      var base = String((window.ZON_CONFIG && ZON_CONFIG.API_BASE_URL) || "").replace(/\/$/, "");
+      var url = base + "/UserProfile/DownloadAvatar?fileId=" + encodeURIComponent(fileId);
+      var tok = "";
+      try {
+        tok = localStorage.getItem((window.ZON_CONFIG && ZON_CONFIG.TOKEN_KEY) || "zon_admin_token") || "";
+      } catch (_) {}
+      fetch(url, { headers: tok ? { Authorization: "Bearer " + tok } : {} })
+        .then(function (r) {
+          if (!r.ok) throw new Error("avatar");
+          return r.blob();
+        })
+        .then(function (blob) {
+          if (!box.isConnected) return;
+          var img = document.createElement("img");
+          img.src = URL.createObjectURL(blob);
+          img.alt = "";
+          img.className = "rounded-circle w-100 h-100";
+          img.style.objectFit = "cover";
+          box.innerHTML = "";
+          box.appendChild(img);
+        })
+        .catch(function () {});
     });
   }
 
@@ -185,6 +220,12 @@
       ZonApi.adminUploadAvatar(f)
         .then(function (res) {
           state.avatarFileId = res && res.fileId ? res.fileId : state.avatarFileId;
+          // eski blob cache tozalash (agar ZonUI bo'lsa)
+          try {
+            if (window.ZonUI && state.avatarFileId) {
+              /* hydrate will fetch fresh fileId */
+            }
+          } catch (_) {}
           paint();
         })
         .catch(function (err) {
