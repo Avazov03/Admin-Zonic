@@ -216,15 +216,16 @@ div[class*="buy-now"] {
 }
 
 /* Activity calendar heatmap (GitHub-style) */
-.zon-heat { overflow-x: auto; }
+.zon-heat { overflow-x: auto; padding-bottom: 0.25rem; position: relative; }
 .zon-heat-months {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: 12px;
+  grid-auto-columns: 14px;
   gap: 3px;
   margin: 0 0 0.35rem 2.25rem;
   min-width: max-content;
 }
+.zon-heat-wrap.is-month .zon-heat-months { grid-auto-columns: 18px; }
 .zon-heat-month {
   font-size: 0.6875rem;
   color: var(--bs-secondary-color, #a5a3ae);
@@ -239,38 +240,54 @@ div[class*="buy-now"] {
 }
 .zon-heat-ydays {
   display: grid;
-  grid-template-rows: repeat(7, 12px);
+  grid-template-rows: repeat(7, 14px);
   gap: 3px;
   font-size: 0.625rem;
   color: var(--bs-secondary-color, #a5a3ae);
-  line-height: 12px;
+  line-height: 14px;
   width: 1.75rem;
   flex-shrink: 0;
 }
 .zon-heat-weeks {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: 12px;
+  grid-auto-columns: 14px;
   gap: 3px;
 }
 .zon-heat-week {
   display: grid;
-  grid-template-rows: repeat(7, 12px);
+  grid-template-rows: repeat(7, 14px);
   gap: 3px;
 }
+.zon-heat-body.is-month .zon-heat-ydays {
+  grid-template-rows: repeat(7, 18px);
+  line-height: 18px;
+}
+.zon-heat-body.is-month .zon-heat-weeks { grid-auto-columns: 18px; }
+.zon-heat-body.is-month .zon-heat-week { grid-template-rows: repeat(7, 18px); }
+.zon-heat-body.is-month .zon-heat-cell {
+  width: 18px;
+  height: 18px;
+}
+.zon-heat-wrap.is-month .zon-heat-legend .zon-heat-cell {
+  width: 14px;
+  height: 14px;
+}
 .zon-heat-cell {
-  width: 12px;
-  height: 12px;
-  border-radius: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
   display: inline-block;
   background: color-mix(in sRGB, var(--bs-heading-color, #5d596c) 12%, transparent);
+  cursor: pointer;
 }
-.zon-heat-cell.is-empty { visibility: hidden; }
+.zon-heat-cell.is-empty { visibility: hidden; pointer-events: none; }
 .zon-heat-cell.lvl-0 { background: color-mix(in sRGB, var(--bs-heading-color, #5d596c) 12%, transparent); }
 .zon-heat-cell.lvl-1 { background: #9be9a8; }
 .zon-heat-cell.lvl-2 { background: #40c463; }
 .zon-heat-cell.lvl-3 { background: #30a14e; }
 .zon-heat-cell.lvl-4 { background: #216e39; }
+.zon-heat-cell:hover { outline: 2px solid rgba(33, 110, 57, 0.55); outline-offset: 1px; }
 .zon-heat-legend {
   display: flex;
   align-items: center;
@@ -279,7 +296,7 @@ div[class*="buy-now"] {
   font-size: 0.75rem;
   color: var(--bs-secondary-color, #a5a3ae);
 }
-.zon-heat-legend .zon-heat-cell { margin: 0 0.1rem; }
+.zon-heat-legend .zon-heat-cell { margin: 0 0.1rem; cursor: default; }
 .zon-heat-stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -291,6 +308,21 @@ div[class*="buy-now"] {
   gap: 0.15rem;
 }
 .zon-heat-stat strong { font-size: 0.9375rem; }
+.zon-heat-tip {
+  position: fixed;
+  z-index: 1080;
+  min-width: 160px;
+  max-width: 260px;
+  padding: 0.55rem 0.75rem;
+  border-radius: 0.5rem;
+  background: var(--bs-body-bg, #fff);
+  color: var(--bs-heading-color, #5d596c);
+  border: 1px solid var(--bs-border-color, #dbdade);
+  box-shadow: 0 0.5rem 1.25rem rgba(34, 48, 62, 0.18);
+  pointer-events: none;
+  font-size: 0.8125rem;
+}
+.zon-heat-tip-day { font-weight: 600; margin-bottom: 0.2rem; }
 @media (max-width: 767.98px) {
   .zon-heat-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

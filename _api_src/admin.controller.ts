@@ -88,9 +88,10 @@ export class AdminController {
   @Get('Dashboard')
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Totals + last-7-days activity' })
-  dashboard() {
-    return this.admin.dashboard();
+  @ApiOperation({ summary: 'Totals + charts + yearly activity calendar' })
+  dashboard(@Query('year') year?: string) {
+    const y = year != null && year !== '' ? Number(year) : undefined;
+    return this.admin.dashboard(Number.isFinite(y as number) ? (y as number) : undefined);
   }
 
   // ─── 15 Users ────────────────────────────────────────────────────────────

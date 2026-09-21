@@ -6,6 +6,10 @@
   var charts = [];
   var heatMetric = "runs";
   var heatData = [];
+  var heatYear = new Date().getFullYear();
+  var heatMonth = 0; // 0 = whole year
+  var availableYears = [];
+  var dashCache = null;
   var MONTHS_UZ = ["Yan", "Fev", "Mar", "Apr", "May", "Iyn", "Iyl", "Avg", "Sen", "Okt", "Noy", "Dek"];
 
   function n(v) {
@@ -142,12 +146,26 @@
     var host = document.getElementById("z-heat-grid");
     var meta = document.getElementById("z-heat-total");
     var statsEl = document.getElementById("z-heat-stats");
+    var rangeEl = document.getElementById("z-heat-range");
     if (!host) return;
-    var days = heatData.slice();
+
+    var prefix =
+      heatMonth > 0
+        ? heatYear + "-" + String(heatMonth).padStart(2, "0")
+        : String(heatYear);
+    var days = heatData.filter(function (d) {
+      return d.day && String(d.day).indexOf(prefix) === 0;
+    });
     var stats = computeHeatStats(days, heatMetric);
     if (meta) meta.textContent = n(stats.total);
     var title = document.getElementById("z-heat-title");
     if (title) title.textContent = metricLabel(heatMetric) + " katakchasi";
+    if (rangeEl) {
+      rangeEl.textContent =
+        heatMonth > 0
+          ? MONTHS_UZ[heatMonth - 1] + " " + heatYear
+          : heatYear + " yil (to‘liq)";
+    }
     if (statsEl) {
       statsEl.innerHTML =
         '<div class="zon-heat-stat"><span class="text-body-secondary">Eng faol oy</span><strong>' +
@@ -164,12 +182,11 @@
         "k</strong></div>";
     }
 
-    // weeks as columns; Mon=0 .. Sun=6
     var weeks = [];
     var cur = null;
     days.forEach(function (d) {
       var dt = new Date(d.day + "T12:00:00");
-      var dow = (dt.getDay() + 6) % 7; // Mon=0
+      var dow = (dt.getDay() + 6) % 7;
       if (!cur || dow === 0) {
         cur = { days: [null, null, null, null, null, null, null] };
         weeks.push(cur);
@@ -179,7 +196,7 @@
 
     var monthMarks = [];
     var lastMonth = "";
-    weeks.forEach(function (w, wi) {
+    weeks.forEach(function (w) {
       var first = w.days.find(function (x) {
         return x && x.day;
       });
@@ -190,22 +207,26 @@
       var m = first.day.slice(0, 7);
       if (m !== lastMonth) {
         lastMonth = m;
-        var mi = Number(first.day.slice(5, 7)) - 1;
-        monthMarks.push(MONTHS_UZ[mi] || "");
+        monthMarks.push(MONTHS_UZ[Number(first.day.slice(5, 7)) - 1] || "");
       } else {
         monthMarks.push("");
       }
     });
 
+    var sizeClass = heatMonth > 0 ? " is-month" : " is-year";
     var html =
-      '<div class="zon-heat-months">' +
+      '<div class="zon-heat-wrap' +
+      sizeClass +
+      '"><div class="zon-heat-months">' +
       monthMarks
         .map(function (m) {
           return '<span class="zon-heat-month">' + m + "</span>";
         })
         .join("") +
       "</div>" +
-      '<div class="zon-heat-body">' +
+      '<div class="zon-heat-body' +
+      sizeClass +
+      '">' +
       '<div class="zon-heat-ydays">' +
       "<span>Du</span><span></span><span>Chor</span><span></span><span>Ju</span><span></span><span>Yak</span>" +
       "</div>" +
@@ -223,12 +244,18 @@
         html +=
           '<span class="zon-heat-cell lvl-' +
           lvl +
-          '" title="' +
+          '" data-day="' +
           d.day +
-          ": " +
-          n(v) +
-          " · " +
-          metricLabel(heatMetric) +
+          '" data-val="' +
+          v +
+          '" data-km="' +
+          (Number(d.distanceKm) || 0) +
+          '" data-runs="' +
+          (Number(d.runs) || 0) +
+          '" data-steps="' +
+          (Number(d.steps) || 0) +
+          '" data-users="' +
+          (Number(d.newUsers) || 0) +
           '"></span>';
       });
       html += "</div>";
@@ -239,17 +266,123 @@
       '<div class="zon-heat-legend"><span>Kam</span>' +
       '<span class="zon-heat-cell lvl-0"></span><span class="zon-heat-cell lvl-1"></span>' +
       '<span class="zon-heat-cell lvl-2"></span><span class="zon-heat-cell lvl-3"></span>' +
-      '<span class="zon-heat-cell lvl-4"></span><span>Ko‘p</span></div>';
+      '<span class="zon-heat-cell lvl-4"></span><span>Ko‘p</span></div>' +
+      '</div><div id="z-heat-tip" class="zon-heat-tip" hidden></div>';
 
     host.innerHTML = html;
+    bindHeatTip(host);
 
     document.querySelectorAll("[data-heat]").forEach(function (btn) {
       btn.classList.toggle("active", btn.getAttribute("data-heat") === heatMetric);
     });
   }
 
+  function bindHeatTip(host) {
+    var tip = document.getElementById("z-heat-tip");
+    if (!tip || !host) return;
+    function hide() {
+      tip.hidden = true;
+    }
+    host.onmouseleave = hide;
+    host.onmousemove = function (e) {
+      var cell = e.target.closest(".zon-heat-cell[data-day]");
+      if (!cell) {
+        hide();
+        return;
+      }
+      var day = cell.getAttribute("data-day");
+      var val = Number(cell.getAttribute("data-val")) || 0;
+      var runs = Number(cell.getAttribute("data-runs")) || 0;
+      var steps = Number(cell.getAttribute("data-steps")) || 0;
+      var users = Number(cell.getAttribute("data-users")) || 0;
+      var dist = Number(cell.getAttribute("data-km")) || 0;
+      tip.innerHTML =
+        '<div class="zon-heat-tip-day">' +
+        day +
+        "</div>" +
+        '<div><strong>' +
+        n(val) +
+        "</strong> " +
+        metricLabel(heatMetric) +
+        "</div>" +
+        '<div class="text-body-secondary small">Yugurish: ' +
+        n(runs) +
+        " · Qadam: " +
+        n(steps) +
+        " · User: " +
+        n(users) +
+        (dist ? " · " + km(dist) + " km" : "") +
+        "</div>";
+      tip.hidden = false;
+      var pad = 14;
+      var x = e.clientX + pad;
+      var y = e.clientY + pad;
+      tip.style.left = "0px";
+      tip.style.top = "0px";
+      var tw = tip.offsetWidth;
+      var th = tip.offsetHeight;
+      if (x + tw > window.innerWidth - 8) x = e.clientX - tw - pad;
+      if (y + th > window.innerHeight - 8) y = e.clientY - th - pad;
+      tip.style.left = x + "px";
+      tip.style.top = y + "px";
+    };
+  }
+
+  function fillYearMonthSelects() {
+    var ySel = document.getElementById("z-heat-year");
+    var mSel = document.getElementById("z-heat-month");
+    if (!ySel || !mSel) return;
+    var years = availableYears.length ? availableYears.slice() : [heatYear];
+    ySel.innerHTML = years
+      .map(function (y) {
+        return (
+          '<option value="' +
+          y +
+          '"' +
+          (y === heatYear ? " selected" : "") +
+          ">" +
+          y +
+          "</option>"
+        );
+      })
+      .join("");
+    var months =
+      '<option value="0"' +
+      (heatMonth === 0 ? " selected" : "") +
+      ">Barcha oylar</option>";
+    for (var i = 1; i <= 12; i++) {
+      months +=
+        '<option value="' +
+        i +
+        '"' +
+        (heatMonth === i ? " selected" : "") +
+        ">" +
+        MONTHS_UZ[i - 1] +
+        "</option>";
+    }
+    mSel.innerHTML = months;
+  }
+
+  function loadCalendarYear(year) {
+    heatYear = year;
+    return ZonApi.adminDashboard({ year: year }).then(function (data) {
+      dashCache = data;
+      heatData = data.activityCalendar || [];
+      availableYears = data.availableYears || availableYears;
+      heatYear = data.calendarYear || year;
+      fillYearMonthSelects();
+      renderHeatmap();
+      return data;
+    });
+  }
+
   function bindHeatmap(data) {
+    dashCache = data;
     heatData = data.activityCalendar || [];
+    availableYears = data.availableYears || [];
+    heatYear = data.calendarYear || heatYear;
+    fillYearMonthSelects();
+
     var tabs = document.getElementById("z-heat-tabs");
     if (tabs && !tabs.getAttribute("data-bound")) {
       tabs.setAttribute("data-bound", "1");
@@ -257,6 +390,27 @@
         var btn = e.target.closest("[data-heat]");
         if (!btn) return;
         heatMetric = btn.getAttribute("data-heat");
+        renderHeatmap();
+      };
+    }
+    var ySel = document.getElementById("z-heat-year");
+    var mSel = document.getElementById("z-heat-month");
+    if (ySel && !ySel.getAttribute("data-bound")) {
+      ySel.setAttribute("data-bound", "1");
+      ySel.onchange = function () {
+        var y = Number(ySel.value);
+        ySel.disabled = true;
+        loadCalendarYear(y)
+          .catch(function () {})
+          .finally(function () {
+            ySel.disabled = false;
+          });
+      };
+    }
+    if (mSel && !mSel.getAttribute("data-bound")) {
+      mSel.setAttribute("data-bound", "1");
+      mSel.onchange = function () {
+        heatMonth = Number(mSel.value) || 0;
         renderHeatmap();
       };
     }
@@ -476,13 +630,17 @@
       "</div>" +
       '<div class="card mb-6"><div class="card-header d-flex flex-wrap justify-content-between align-items-start gap-3">' +
       '<div><h5 class="card-title mb-1" id="z-heat-title">Faollik katakchasi</h5>' +
-      '<div class="d-flex align-items-baseline gap-2"><h3 class="mb-0" id="z-heat-total">—</h3>' +
-      '<span class="text-body-secondary small">oxirgi 16 hafta</span></div></div>' +
-      '<ul class="nav nav-pills flex-wrap gap-1" id="z-heat-tabs" role="tablist">' +
+      '<div class="d-flex align-items-baseline gap-2 flex-wrap">' +
+      '<h3 class="mb-0" id="z-heat-total">—</h3>' +
+      '<span class="text-body-secondary small" id="z-heat-range">—</span></div></div>' +
+      '<div class="d-flex flex-wrap align-items-center gap-2">' +
+      '<select id="z-heat-year" class="form-select form-select-sm" style="width:auto;min-width:5.5rem"></select>' +
+      '<select id="z-heat-month" class="form-select form-select-sm" style="width:auto;min-width:8rem"></select>' +
+      '<ul class="nav nav-pills flex-wrap gap-1 mb-0" id="z-heat-tabs" role="tablist">' +
       '<li class="nav-item"><button type="button" class="nav-link active" data-heat="runs">Yugurish</button></li>' +
       '<li class="nav-item"><button type="button" class="nav-link" data-heat="steps">Qadam</button></li>' +
       '<li class="nav-item"><button type="button" class="nav-link" data-heat="newUsers">Yangi user</button></li>' +
-      "</ul></div>" +
+      "</ul></div></div>" +
       '<div class="card-body"><div id="z-heat-grid" class="zon-heat"></div>' +
       '<div class="zon-heat-stats mt-4" id="z-heat-stats"></div></div></div>' +
       '<div class="row g-6 mb-6">' +

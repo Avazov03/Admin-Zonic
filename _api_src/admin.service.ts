@@ -103,7 +103,14 @@ export class AdminService {
   }
 
   // ─── Dashboard ───────────────────────────────────────────────────────────
-  async dashboard() {
+  async dashboard(year?: number) {
+    const y =
+      year && Number.isFinite(year) && year >= 2020 && year <= 2100
+        ? Math.trunc(year)
+        : new Date().getFullYear();
+    const calFrom = `${y}-01-01`;
+    const calTo = `${y}-12-31`;
+
     const [
       [users],
       [events],
@@ -116,6 +123,7 @@ export class AdminService {
       [push],
       daily,
       calendar,
+      yearRows,
     ] = await Promise.all([
       this.db.query(
         `SELECT COUNT(*)::int AS total,
@@ -174,21 +182,34 @@ export class AdminService {
            FROM generate_series(CURRENT_DATE - 6, CURRENT_DATE, interval '1 day') AS d
            ORDER BY 1`,
       ),
-      // 16 weeks, Monday-aligned (PostgreSQL date_trunc('week') = Monday)
+      // Full selected year (Jan 1 – Dec 31)
       this.db.query(
         `SELECT d::date AS day,
                 (SELECT COUNT(*) FROM sys_user u WHERE u.dateofcreated::date = d)::int AS new_users,
                 (SELECT COUNT(*) FROM game_free_run r WHERE r.started_at::date = d)::int AS runs,
                 (SELECT COALESCE(SUM(distance_km), 0) FROM game_free_run r WHERE r.started_at::date = d)::float AS km,
                 (SELECT COALESCE(SUM(steps), 0) FROM game_step_activity s WHERE s.started_at::date = d)::bigint AS steps
-           FROM generate_series(
-                  (date_trunc('week', CURRENT_DATE::timestamp) - interval '15 weeks')::date,
-                  CURRENT_DATE,
-                  interval '1 day'
-                ) AS d
+           FROM generate_series($1::date, $2::date, interval '1 day') AS d
            ORDER BY 1`,
+        [calFrom, calTo],
+      ),
+      this.db.query(
+        `SELECT DISTINCT EXTRACT(YEAR FROM d)::int AS y FROM (
+            SELECT dateofcreated AS d FROM sys_user
+            UNION ALL SELECT started_at FROM game_free_run
+            UNION ALL SELECT started_at FROM game_step_activity
+            UNION ALL SELECT captured_at FROM game_territory
+          ) t
+          WHERE d IS NOT NULL
+          ORDER BY 1`,
       ),
     ]);
+
+    const availableYears = (yearRows as Array<{ y: number }>)
+      .map((r) => Number(r.y))
+      .filter((n) => Number.isFinite(n));
+    if (!availableYears.includes(y)) availableYears.push(y);
+    availableYears.sort((a, b) => a - b);
 
     return {
       users: {
@@ -261,6 +282,8 @@ export class AdminService {
         distanceKm: Number(r.km),
         steps: Number(r.steps),
       })),
+      calendarYear: y,
+      availableYears,
     };
   }
 

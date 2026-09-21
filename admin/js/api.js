@@ -157,7 +157,11 @@
     },
 
     adminMe: () => request("/Admin/Auth/Me", { method: "GET" }),
-    adminDashboard: () => request("/Admin/Dashboard", { method: "GET" }),
+    adminDashboard: (opts) => {
+      const y = opts && opts.year != null ? Number(opts.year) : null;
+      const q = y && isFinite(y) ? "?year=" + encodeURIComponent(String(y)) : "";
+      return request("/Admin/Dashboard" + q, { method: "GET" });
+    },
 
     logout: () => {
       setToken("");
