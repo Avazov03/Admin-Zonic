@@ -1,0 +1,62 @@
+# Dependencies / caches
+node_modules/
+hts-cache/
+**/hts-cache/
+.cache/
+dist/
+build/
+*.log
+
+# HTTrack / scraped junk
+demos.themeselection.com/
+hts-log.txt
+
+# Secrets & local keys
+.env
+.env.*
+!.env.example
+*.pem
+*.ppk
+*.key
+!**/*.pub
+deploy/.tmp*
+**/*_deploy_key*
+**/zon_deploy*
+
+# One-off remote check scripts (may contain env-bound secrets / machine-specific)
+deploy/_check_*.sh
+deploy/_verify_*.sh
+deploy/_cleanup_*.sh
+deploy/_confirm_*.sh
+deploy/_deploy_*.sh
+deploy/_patch_*.sh
+deploy/_drop_*.sh
+deploy/_add_*.sh
+deploy/_find_*.sh
+deploy/_dump_*.sh
+deploy/_gen_*.sh
+_sanitize_deploy_passwords.py
+
+# Large / generated deploy artifacts
+deploy/zon-admin-deploy/
+deploy/zon-admin-deploy.zip
+deploy/_sync_payload/
+deploy/_sync_payload2/
+deploy/_sync_payload_map/
+*.zip
+*.tgz
+
+# Local dumps / temp analysis
+_openapi.json
+_swagger*.html
+_swagger*.js
+_health_report.json
+_api_catalog.txt
+_api_deep.txt
+countries_raw.txt
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
