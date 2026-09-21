@@ -5,13 +5,14 @@ alwaysApply: true
 
 # Prompt → change → ask → confirm
 
-Whenever the user's prompt causes **any project change** (code, config, CSS/JS, API, DB script that affects production, etc.):
+Whenever the user's prompt causes **any lasting change** — code, config, CSS/JS, API, **or live production data** (events, users, news, badges, DB writes, etc.):
 
-## 1. Do the work first
-Implement the requested change.
+## 1. Prefer ask before risky/live actions
+- **Code/file edits:** implement, then ask before commit/push/deploy.
+- **Live server/DB actions** (e'lon, user yaratish, delete, production API writes): **ask first** unless the user already said clearly to do it in the same message (e.g. "e'lon qil", "yarat").
 
-## 2. Always ask (do not skip)
-Before finishing, **ask explicitly** in Uzbek (or the user's language):
+## 2. Always ask before commit / push / deploy (do not skip)
+Before finishing a code change, **ask explicitly**:
 
 > Commit + `git push` (Avazov03/Admin-Zonic) + serverga deploy qilaymi?
 
