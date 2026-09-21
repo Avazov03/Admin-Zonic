@@ -1,22 +1,29 @@
 /**
  * Events / Musobaqalar — /Admin/Events + Participants
+ * Filter: barcha / aktiv / tugagan / draft / tez orada
  */
 (function () {
   var U = window.ZonUI;
   var editing = null;
+  var allItems = [];
+  var filter = "all";
 
   U.ready(function () {
     var root = U.root();
     if (!root || !window.ZonApi) return;
     root.innerHTML =
       '<div class="row g-6 mb-6" id="z-stats"></div>' +
-      '<div class="card mb-6"><div class="card-header d-flex justify-content-between align-items-center">' +
-      '<h5 class="card-title mb-0">Musobaqalar</h5>' +
+      '<div class="card">' +
+      '<div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-3">' +
+      '<div><h5 class="card-title mb-1">Musobaqalar</h5>' +
+      '<p class="mb-0 text-body-secondary small">Holat bo‘yicha filtr</p></div>' +
       '<button type="button" class="btn btn-primary" id="z-new">Yangi musobaqa</button></div>' +
       '<div id="z-alert" class="px-6 pt-4"></div>' +
+      '<div class="card-body pt-0">' +
+      '<ul class="nav nav-pills mb-4 flex-wrap gap-1" id="z-filters" role="tablist"></ul>' +
       '<div class="table-responsive"><table class="table table-hover">' +
       "<thead><tr><th>Nomi</th><th>Maqsad</th><th>Muddat</th><th>Ishtirokchi</th><th>Holat</th><th></th></tr></thead>" +
-      '<tbody id="z-body"></tbody></table></div></div>' +
+      '<tbody id="z-body"></tbody></table></div></div></div>' +
       formModal() +
       partsModal();
 
@@ -35,6 +42,13 @@
     };
     document.getElementById("z-save").onclick = save;
     document.getElementById("z-body").onclick = onRow;
+    document.getElementById("z-filters").onclick = function (e) {
+      var btn = e.target.closest("[data-filter]");
+      if (!btn) return;
+      filter = btn.getAttribute("data-filter");
+      renderFilters();
+      renderTable();
+    };
     load();
   });
 
@@ -73,7 +87,9 @@
     if (!iso) return "";
     var d = new Date(iso);
     if (isNaN(d.getTime())) return "";
-    var pad = function (x) { return String(x).padStart(2, "0"); };
+    var pad = function (x) {
+      return String(x).padStart(2, "0");
+    };
     return (
       d.getFullYear() +
       "-" +
@@ -110,59 +126,133 @@
     if (s === "ended") return U.badge("ended", "secondary");
     return U.badge(s || "draft", "warning");
   }
+  function bucket(ev) {
+    var now = Date.now();
+    var start = ev.startsAt ? new Date(ev.startsAt).getTime() : NaN;
+    var end = ev.endsAt ? new Date(ev.endsAt).getTime() : NaN;
+    if (ev.status === "draft") return "draft";
+    if (ev.status === "ended" || (isFinite(end) && end < now)) return "ended";
+    if (ev.status === "published" && isFinite(start) && start > now) return "upcoming";
+    if (ev.status === "published") return "active";
+    return "all";
+  }
+  function filtered() {
+    if (filter === "all") return allItems.slice();
+    return allItems.filter(function (ev) {
+      return bucket(ev) === filter;
+    });
+  }
+  function counts() {
+    var c = { all: allItems.length, active: 0, ended: 0, draft: 0, upcoming: 0 };
+    allItems.forEach(function (ev) {
+      var b = bucket(ev);
+      if (c[b] != null) c[b] += 1;
+    });
+    return c;
+  }
+  function renderFilters() {
+    var c = counts();
+    var tabs = [
+      { id: "all", label: "Barcha", icon: "bx-list-ul" },
+      { id: "active", label: "Aktiv", icon: "bx-play-circle" },
+      { id: "upcoming", label: "Tez orada", icon: "bx-time-five" },
+      { id: "ended", label: "Tugagan", icon: "bx-flag" },
+      { id: "draft", label: "Qoralama", icon: "bx-file" },
+    ];
+    document.getElementById("z-filters").innerHTML = tabs
+      .map(function (t) {
+        return (
+          '<li class="nav-item" role="presentation">' +
+          '<button type="button" class="nav-link' +
+          (filter === t.id ? " active" : "") +
+          '" data-filter="' +
+          t.id +
+          '"><i class="icon-base bx ' +
+          t.icon +
+          ' me-1"></i>' +
+          t.label +
+          ' <span class="badge bg-label-primary rounded-pill ms-1">' +
+          U.n(c[t.id] || 0) +
+          "</span></button></li>"
+        );
+      })
+      .join("");
+  }
+  function renderTable() {
+    var items = filtered().sort(function (a, b) {
+      return new Date(b.startsAt || 0) - new Date(a.startsAt || 0);
+    });
+    var body = document.getElementById("z-body");
+    if (!items.length) {
+      body.innerHTML = '<tr><td colspan="6" class="text-body-secondary">Bu filterda musobaqa yo\'q</td></tr>';
+      return;
+    }
+    body.innerHTML = items
+      .map(function (ev) {
+        var live = bucket(ev);
+        var extra =
+          live === "active"
+            ? ' <span class="badge bg-label-success">Aktiv</span>'
+            : live === "upcoming"
+              ? ' <span class="badge bg-label-info">Tez orada</span>'
+              : live === "ended"
+                ? ' <span class="badge bg-label-secondary">Tugagan</span>'
+                : "";
+        return (
+          "<tr><td><span class=\"fw-medium\">" +
+          U.esc(ev.title) +
+          "</span>" +
+          extra +
+          "</td><td>" +
+          U.esc(ev.goalType) +
+          ": " +
+          U.esc(ev.goalValue) +
+          "</td><td><small>" +
+          U.dt(ev.startsAt) +
+          "<br>" +
+          U.dt(ev.endsAt) +
+          "</small></td><td>" +
+          U.n(ev.participantCount) +
+          "</td><td>" +
+          statusBadge(ev.status) +
+          '</td><td class="text-nowrap">' +
+          '<button class="btn btn-sm btn-label-primary me-1" data-edit="' +
+          U.esc(ev.id) +
+          '">Tahrir</button>' +
+          '<button class="btn btn-sm btn-label-info me-1" data-parts="' +
+          U.esc(ev.id) +
+          '">Ishtirokchi</button>' +
+          '<button class="btn btn-sm btn-label-danger" data-del="' +
+          U.esc(ev.id) +
+          '">O\'chirish</button></td></tr>'
+        );
+      })
+      .join("");
+  }
   function load() {
     setAlert("", "");
+    document.getElementById("z-body").innerHTML =
+      '<tr><td colspan="6" class="text-body-secondary">Yuklanmoqda…</td></tr>';
     ZonApi.get("/Admin/Events")
       .then(function (data) {
-        var items = (data && data.items) || [];
-        window.__events = items;
-        var pub = items.filter(function (x) { return x.status === "published"; }).length;
-        var act = items.filter(function (x) { return x.status === "published"; }).length;
+        allItems = (data && data.items) || [];
+        window.__events = allItems;
+        var c = counts();
         document.getElementById("z-stats").innerHTML =
-          U.statCard("Jami", U.n(items.length), "Musobaqa", "bx-calendar-event", "primary") +
-          U.statCard("E'lon", U.n(pub), "published", "bx-broadcast", "success") +
+          U.statCard("Jami", U.n(c.all), "Musobaqa", "bx-calendar-event", "primary") +
+          U.statCard("Aktiv", U.n(c.active), "Hozir", "bx-play-circle", "success") +
+          U.statCard("Tugagan", U.n(c.ended), "Yakunlangan", "bx-flag", "secondary") +
           U.statCard(
             "Ishtirokchilar",
-            U.n(items.reduce(function (a, b) { return a + Number(b.participantCount || 0); }, 0)),
+            U.n(allItems.reduce(function (a, b) {
+              return a + Number(b.participantCount || 0);
+            }, 0)),
             "Jami",
             "bx-group",
             "info"
           );
-        var body = document.getElementById("z-body");
-        if (!items.length) {
-          body.innerHTML = '<tr><td colspan="6" class="text-body-secondary">Musobaqa yo\'q</td></tr>';
-          return;
-        }
-        body.innerHTML = items
-          .map(function (ev) {
-            return (
-              "<tr><td><span class=\"fw-medium\">" +
-              U.esc(ev.title) +
-              "</span></td><td>" +
-              U.esc(ev.goalType) +
-              ": " +
-              U.esc(ev.goalValue) +
-              "</td><td><small>" +
-              U.dt(ev.startsAt) +
-              "<br>" +
-              U.dt(ev.endsAt) +
-              "</small></td><td>" +
-              U.n(ev.participantCount) +
-              "</td><td>" +
-              statusBadge(ev.status) +
-              '</td><td class="text-nowrap">' +
-              '<button class="btn btn-sm btn-label-primary me-1" data-edit="' +
-              U.esc(ev.id) +
-              '">Tahrir</button>' +
-              '<button class="btn btn-sm btn-label-info me-1" data-parts="' +
-              U.esc(ev.id) +
-              '">Ishtirokchi</button>' +
-              '<button class="btn btn-sm btn-label-danger" data-del="' +
-              U.esc(ev.id) +
-              '">O\'chirish</button></td></tr>'
-            );
-          })
-          .join("");
+        renderFilters();
+        renderTable();
       })
       .catch(function (err) {
         if (U.authFail(err)) return;
@@ -175,7 +265,10 @@
     var parts = e.target.closest("[data-parts]");
     if (edit) {
       editing = edit.getAttribute("data-edit");
-      var ev = (window.__events || []).find(function (x) { return x.id === editing; }) || {};
+      var ev =
+        (window.__events || []).find(function (x) {
+          return x.id === editing;
+        }) || {};
       fill(ev);
       if (U.revealSet) {
         U.revealSet(document.getElementById("z-publish-wrap"), false);

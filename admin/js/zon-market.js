@@ -1,33 +1,45 @@
 /**
- * Market — /Admin/Market/Items (POST upsert by code)
+ * Market — /Admin/Market/Items
+ * Yutuqlar kabi: kategoriya tablar + narx bo‘yicha tartib
  */
 (function () {
   var U = window.ZonUI;
   var editing = null;
+  var allItems = [];
+  var activeTab = "all";
 
   U.ready(function () {
     var root = U.root();
     if (!root || !window.ZonApi) return;
     root.innerHTML =
       '<div class="row g-6 mb-6" id="z-stats"></div>' +
-      '<div class="card mb-6"><div class="card-header d-flex justify-content-between align-items-center">' +
-      '<h5 class="card-title mb-0">Market</h5>' +
+      '<div class="card">' +
+      '<div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-3">' +
+      '<div><h5 class="card-title mb-1">Market</h5>' +
+      '<p class="mb-0 text-body-secondary small">Kategoriya bo‘yicha · narx tartibida</p></div>' +
       '<button type="button" class="btn btn-primary" id="z-new">Mahsulot</button></div>' +
       '<div id="z-alert" class="px-6 pt-4"></div>' +
-      '<div class="table-responsive"><table class="table table-hover">' +
-      "<thead><tr><th></th><th>Kod</th><th>Nomi</th><th>Narx</th><th>Kategoriya</th><th>Holat</th><th></th></tr></thead>" +
-      '<tbody id="z-body"></tbody></table></div></div>' +
+      '<div class="card-body pt-0">' +
+      '<ul class="nav nav-pills mb-4 flex-wrap gap-1" id="z-tabs" role="tablist"></ul>' +
+      '<div class="tab-content" id="z-tab-panels"></div>' +
+      "</div></div>" +
       formModal();
 
     document.getElementById("z-new").onclick = function () {
       editing = null;
-      fill({});
+      fill({ category: activeTab !== "all" && activeTab !== "premium" && activeTab !== "inactive" ? activeTab : "" });
       document.getElementById("z-code").readOnly = false;
       document.querySelector("#zFormModal .modal-title").textContent = "Yangi mahsulot";
       U.modalShow("zFormModal");
     };
     document.getElementById("z-save").onclick = save;
-    document.getElementById("z-body").onclick = onRow;
+    document.getElementById("z-tab-panels").onclick = onRow;
+    document.getElementById("z-tabs").onclick = function (e) {
+      var btn = e.target.closest("[data-tab]");
+      if (!btn) return;
+      activeTab = btn.getAttribute("data-tab");
+      switchTab(activeTab);
+    };
     load();
   });
 
@@ -71,56 +83,164 @@
   }
   function thumb(fileId) {
     if (!fileId) return '<span class="avatar-initial rounded bg-label-secondary">—</span>';
-    return '<img src="' + U.esc(U.imageUrl(fileId)) + '" alt="" class="rounded" width="38" height="38" style="object-fit:cover" />';
+    return (
+      '<img src="' +
+      U.esc(U.imageUrl(fileId)) +
+      '" alt="" class="rounded" width="38" height="38" style="object-fit:cover" />'
+    );
+  }
+  function catKey(m) {
+    return String(m.category || "boshqa").trim() || "boshqa";
+  }
+  function catLabel(k) {
+    if (k === "all") return "Barcha";
+    if (k === "premium") return "Premium";
+    if (k === "inactive") return "O‘chiq";
+    if (k === "frame") return "Ramka";
+    if (k === "badge") return "Badge";
+    if (k === "boshqa") return "Boshqa";
+    return k.charAt(0).toUpperCase() + k.slice(1);
+  }
+  function catIcon(k) {
+    if (k === "all") return "bx-store";
+    if (k === "premium") return "bx-diamond";
+    if (k === "inactive") return "bx-hide";
+    if (k === "frame") return "bx-image";
+    return "bx-package";
+  }
+  function sortByPrice(a, b) {
+    return Number(a.price || 0) - Number(b.price || 0);
+  }
+  function rowHtml(m) {
+    return (
+      "<tr><td>" +
+      thumb(m.imageFileId) +
+      "</td><td><code>" +
+      U.esc(m.code) +
+      "</code></td><td>" +
+      U.esc(m.name || m.title) +
+      "</td><td>" +
+      U.n(m.price) +
+      " " +
+      U.esc(m.currency || "tanga") +
+      "</td><td>" +
+      U.esc(m.category || "—") +
+      "</td><td>" +
+      (m.isPremium ? U.badge("Premium", "warning") + " " : "") +
+      (m.isActive ? U.badge("Faol", "success") : U.badge("O'chiq", "secondary")) +
+      '</td><td><button class="btn btn-sm btn-label-primary" data-edit="' +
+      U.esc(m.code) +
+      '">Tahrir</button></td></tr>'
+    );
+  }
+  function paneHtml(key, list) {
+    var rows = list.slice().sort(sortByPrice);
+    return (
+      '<div class="tab-pane fade" data-pane="' +
+      U.esc(key) +
+      '" role="tabpanel">' +
+      '<p class="text-body-secondary small mb-3">' +
+      U.esc(catLabel(key)) +
+      " · " +
+      U.n(rows.length) +
+      " ta · narx bo‘yicha</p>" +
+      '<div class="table-responsive"><table class="table table-hover">' +
+      "<thead><tr><th></th><th>Kod</th><th>Nomi</th><th>Narx</th><th>Kategoriya</th><th>Holat</th><th></th></tr></thead>" +
+      "<tbody>" +
+      (rows.length
+        ? rows.map(rowHtml).join("")
+        : '<tr><td colspan="7" class="text-body-secondary">Bu bo‘lim bo‘sh</td></tr>') +
+      "</tbody></table></div></div>"
+    );
+  }
+  function tabBtn(key, count, on) {
+    return (
+      '<li class="nav-item" role="presentation">' +
+      '<button type="button" class="nav-link' +
+      (on ? " active" : "") +
+      '" data-tab="' +
+      U.esc(key) +
+      '" role="tab"><i class="icon-base bx ' +
+      catIcon(key) +
+      ' me-1"></i>' +
+      U.esc(catLabel(key)) +
+      ' <span class="badge bg-label-primary rounded-pill ms-1">' +
+      U.n(count) +
+      "</span></button></li>"
+    );
+  }
+  function switchTab(key) {
+    activeTab = key || "all";
+    Array.prototype.forEach.call(document.querySelectorAll("#z-tabs [data-tab]"), function (el) {
+      el.classList.toggle("active", el.getAttribute("data-tab") === activeTab);
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("#z-tab-panels .tab-pane"), function (pane) {
+      var on = pane.getAttribute("data-pane") === activeTab;
+      pane.classList.toggle("show", on);
+      pane.classList.toggle("active", on);
+    });
   }
   function load() {
     setAlert("", "");
+    var panels = document.getElementById("z-tab-panels");
+    panels.innerHTML = '<div class="text-body-secondary py-4">Yuklanmoqda…</div>';
     ZonApi.get("/Admin/Market/Items")
       .then(function (data) {
-        var items = (data && data.items) || [];
-        window.__market = items;
-        var active = items.filter(function (x) { return x.isActive; }).length;
+        allItems = (data && data.items) || [];
+        window.__market = allItems;
+        var active = allItems.filter(function (x) {
+          return x.isActive;
+        }).length;
+        var premium = allItems.filter(function (x) {
+          return x.isPremium;
+        });
+        var inactive = allItems.filter(function (x) {
+          return !x.isActive;
+        });
+        var byCat = {};
+        allItems.forEach(function (m) {
+          var k = catKey(m);
+          if (!byCat[k]) byCat[k] = [];
+          byCat[k].push(m);
+        });
+        var catOrder = Object.keys(byCat).sort();
         document.getElementById("z-stats").innerHTML =
-          U.statCard("Jami", U.n(items.length), "Mahsulot", "bx-store", "primary") +
+          U.statCard("Jami", U.n(allItems.length), "Mahsulot", "bx-store", "primary") +
           U.statCard("Faol", U.n(active), "Sotuvda", "bx-check-circle", "success") +
-          U.statCard(
-            "Premium",
-            U.n(items.filter(function (x) { return x.isPremium; }).length),
-            "Maxsus",
-            "bx-diamond",
-            "warning"
-          );
-        var body = document.getElementById("z-body");
-        if (!items.length) {
-          body.innerHTML = '<tr><td colspan="7" class="text-body-secondary">Mahsulot yo\'q</td></tr>';
+          U.statCard("Premium", U.n(premium.length), "Maxsus", "bx-diamond", "warning") +
+          U.statCard("Kategoriya", U.n(catOrder.length), "Guruh", "bx-category", "info");
+
+        if (!allItems.length) {
+          document.getElementById("z-tabs").innerHTML = "";
+          panels.innerHTML = '<div class="alert alert-secondary mb-0">Mahsulot yo\'q</div>';
           return;
         }
-        body.innerHTML = items
-          .map(function (m) {
-            return (
-              "<tr><td>" +
-              thumb(m.imageFileId) +
-              "</td><td><code>" +
-              U.esc(m.code) +
-              "</code></td><td>" +
-              U.esc(m.name || m.title) +
-              "</td><td>" +
-              U.n(m.price) +
-              " " +
-              U.esc(m.currency || "tanga") +
-              "</td><td>" +
-              U.esc(m.category || "—") +
-              "</td><td>" +
-              (m.isActive ? U.badge("Faol", "success") : U.badge("O'chiq", "secondary")) +
-              '</td><td><button class="btn btn-sm btn-label-primary" data-edit="' +
-              U.esc(m.code) +
-              '">Tahrir</button></td></tr>'
-            );
+
+        var order = ["all"].concat(catOrder);
+        if (premium.length) order.push("premium");
+        if (inactive.length) order.push("inactive");
+        if (order.indexOf(activeTab) < 0) activeTab = "all";
+
+        var groups = { all: allItems, premium: premium, inactive: inactive };
+        catOrder.forEach(function (k) {
+          groups[k] = byCat[k];
+        });
+
+        document.getElementById("z-tabs").innerHTML = order
+          .map(function (k) {
+            return tabBtn(k, (groups[k] || []).length, k === activeTab);
           })
           .join("");
+        panels.innerHTML = order
+          .map(function (k) {
+            return paneHtml(k, groups[k] || []);
+          })
+          .join("");
+        switchTab(activeTab);
       })
       .catch(function (err) {
         if (U.authFail(err)) return;
+        panels.innerHTML = "";
         setAlert("danger", U.errMsg(err));
       });
   }
@@ -128,7 +248,10 @@
     var edit = e.target.closest("[data-edit]");
     if (!edit) return;
     editing = edit.getAttribute("data-edit");
-    var m = (window.__market || []).find(function (x) { return x.code === editing; }) || {};
+    var m =
+      (window.__market || []).find(function (x) {
+        return x.code === editing;
+      }) || {};
     fill(m);
     document.getElementById("z-code").readOnly = true;
     document.querySelector("#zFormModal .modal-title").textContent = "Tahrirlash: " + editing;
