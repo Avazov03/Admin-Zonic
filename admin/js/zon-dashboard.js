@@ -4,6 +4,9 @@
  */
 (function () {
   var charts = [];
+  var heatMetric = "runs";
+  var heatData = [];
+  var MONTHS_UZ = ["Yan", "Fev", "Mar", "Apr", "May", "Iyn", "Iyl", "Avg", "Sen", "Okt", "Noy", "Dek"];
 
   function n(v) {
     var x = Number(v);
@@ -55,6 +58,209 @@
     c.render();
     charts.push(c);
     return c;
+  }
+
+  function dayValue(d, metric) {
+    if (metric === "steps") return Number(d.steps) || 0;
+    if (metric === "newUsers") return Number(d.newUsers) || 0;
+    return Number(d.runs) || 0;
+  }
+
+  function metricLabel(metric) {
+    if (metric === "steps") return "Qadam";
+    if (metric === "newUsers") return "Yangi user";
+    return "Yugurish";
+  }
+
+  function heatLevel(v, max) {
+    if (!v || v <= 0) return 0;
+    if (!max || max <= 0) return 1;
+    var r = v / max;
+    if (r <= 0.25) return 1;
+    if (r <= 0.5) return 2;
+    if (r <= 0.75) return 3;
+    return 4;
+  }
+
+  function computeHeatStats(days, metric) {
+    var total = 0;
+    var maxVal = 0;
+    var maxDay = null;
+    var monthSum = {};
+    days.forEach(function (d) {
+      var v = dayValue(d, metric);
+      total += v;
+      if (v > maxVal) {
+        maxVal = v;
+        maxDay = d.day;
+      }
+      if (v > 0 && d.day) {
+        var mk = String(d.day).slice(0, 7);
+        monthSum[mk] = (monthSum[mk] || 0) + v;
+      }
+    });
+    var bestMonth = null;
+    var bestMonthVal = 0;
+    Object.keys(monthSum).forEach(function (mk) {
+      if (monthSum[mk] > bestMonthVal) {
+        bestMonthVal = monthSum[mk];
+        bestMonth = mk;
+      }
+    });
+    var longest = 0;
+    var current = 0;
+    var run = 0;
+    days.forEach(function (d) {
+      if (dayValue(d, metric) > 0) {
+        run += 1;
+        if (run > longest) longest = run;
+      } else {
+        run = 0;
+      }
+    });
+    for (var i = days.length - 1; i >= 0; i--) {
+      if (dayValue(days[i], metric) > 0) current += 1;
+      else break;
+    }
+    var monthLabel = "—";
+    if (bestMonth) {
+      var parts = bestMonth.split("-");
+      var mi = Number(parts[1]) - 1;
+      monthLabel = (MONTHS_UZ[mi] || bestMonth) + " " + parts[0];
+    }
+    return {
+      total: total,
+      maxVal: maxVal,
+      maxDay: maxDay,
+      bestMonth: monthLabel,
+      longest: longest,
+      current: current,
+    };
+  }
+
+  function renderHeatmap() {
+    var host = document.getElementById("z-heat-grid");
+    var meta = document.getElementById("z-heat-total");
+    var statsEl = document.getElementById("z-heat-stats");
+    if (!host) return;
+    var days = heatData.slice();
+    var stats = computeHeatStats(days, heatMetric);
+    if (meta) meta.textContent = n(stats.total);
+    var title = document.getElementById("z-heat-title");
+    if (title) title.textContent = metricLabel(heatMetric) + " katakchasi";
+    if (statsEl) {
+      statsEl.innerHTML =
+        '<div class="zon-heat-stat"><span class="text-body-secondary">Eng faol oy</span><strong>' +
+        stats.bestMonth +
+        '</strong></div>' +
+        '<div class="zon-heat-stat"><span class="text-body-secondary">Eng faol kun</span><strong>' +
+        (stats.maxDay || "—") +
+        '</strong></div>' +
+        '<div class="zon-heat-stat"><span class="text-body-secondary">Eng uzun streak</span><strong>' +
+        stats.longest +
+        "k</strong></div>" +
+        '<div class="zon-heat-stat"><span class="text-body-secondary">Joriy streak</span><strong>' +
+        stats.current +
+        "k</strong></div>";
+    }
+
+    // weeks as columns; Mon=0 .. Sun=6
+    var weeks = [];
+    var cur = null;
+    days.forEach(function (d) {
+      var dt = new Date(d.day + "T12:00:00");
+      var dow = (dt.getDay() + 6) % 7; // Mon=0
+      if (!cur || dow === 0) {
+        cur = { days: [null, null, null, null, null, null, null] };
+        weeks.push(cur);
+      }
+      cur.days[dow] = d;
+    });
+
+    var monthMarks = [];
+    var lastMonth = "";
+    weeks.forEach(function (w, wi) {
+      var first = w.days.find(function (x) {
+        return x && x.day;
+      });
+      if (!first) {
+        monthMarks.push("");
+        return;
+      }
+      var m = first.day.slice(0, 7);
+      if (m !== lastMonth) {
+        lastMonth = m;
+        var mi = Number(first.day.slice(5, 7)) - 1;
+        monthMarks.push(MONTHS_UZ[mi] || "");
+      } else {
+        monthMarks.push("");
+      }
+    });
+
+    var html =
+      '<div class="zon-heat-months">' +
+      monthMarks
+        .map(function (m) {
+          return '<span class="zon-heat-month">' + m + "</span>";
+        })
+        .join("") +
+      "</div>" +
+      '<div class="zon-heat-body">' +
+      '<div class="zon-heat-ydays">' +
+      "<span>Du</span><span></span><span>Chor</span><span></span><span>Ju</span><span></span><span>Yak</span>" +
+      "</div>" +
+      '<div class="zon-heat-weeks">';
+
+    weeks.forEach(function (w) {
+      html += '<div class="zon-heat-week">';
+      w.days.forEach(function (d) {
+        if (!d) {
+          html += '<span class="zon-heat-cell is-empty"></span>';
+          return;
+        }
+        var v = dayValue(d, heatMetric);
+        var lvl = heatLevel(v, stats.maxVal);
+        html +=
+          '<span class="zon-heat-cell lvl-' +
+          lvl +
+          '" title="' +
+          d.day +
+          ": " +
+          n(v) +
+          " · " +
+          metricLabel(heatMetric) +
+          '"></span>';
+      });
+      html += "</div>";
+    });
+
+    html +=
+      "</div></div>" +
+      '<div class="zon-heat-legend"><span>Kam</span>' +
+      '<span class="zon-heat-cell lvl-0"></span><span class="zon-heat-cell lvl-1"></span>' +
+      '<span class="zon-heat-cell lvl-2"></span><span class="zon-heat-cell lvl-3"></span>' +
+      '<span class="zon-heat-cell lvl-4"></span><span>Ko‘p</span></div>';
+
+    host.innerHTML = html;
+
+    document.querySelectorAll("[data-heat]").forEach(function (btn) {
+      btn.classList.toggle("active", btn.getAttribute("data-heat") === heatMetric);
+    });
+  }
+
+  function bindHeatmap(data) {
+    heatData = data.activityCalendar || [];
+    var tabs = document.getElementById("z-heat-tabs");
+    if (tabs && !tabs.getAttribute("data-bound")) {
+      tabs.setAttribute("data-bound", "1");
+      tabs.onclick = function (e) {
+        var btn = e.target.closest("[data-heat]");
+        if (!btn) return;
+        heatMetric = btn.getAttribute("data-heat");
+        renderHeatmap();
+      };
+    }
+    renderHeatmap();
   }
 
   function renderCharts(data) {
@@ -268,6 +474,17 @@
       card("Market", n(market.active), "Premium " + n(market.premium), "bx-store", "warning") +
       card("Push", n(push.campaigns), "Yuborilgan " + n(push.sentTotal), "bx-bell", "info") +
       "</div>" +
+      '<div class="card mb-6"><div class="card-header d-flex flex-wrap justify-content-between align-items-start gap-3">' +
+      '<div><h5 class="card-title mb-1" id="z-heat-title">Faollik katakchasi</h5>' +
+      '<div class="d-flex align-items-baseline gap-2"><h3 class="mb-0" id="z-heat-total">—</h3>' +
+      '<span class="text-body-secondary small">oxirgi 16 hafta</span></div></div>' +
+      '<ul class="nav nav-pills flex-wrap gap-1" id="z-heat-tabs" role="tablist">' +
+      '<li class="nav-item"><button type="button" class="nav-link active" data-heat="runs">Yugurish</button></li>' +
+      '<li class="nav-item"><button type="button" class="nav-link" data-heat="steps">Qadam</button></li>' +
+      '<li class="nav-item"><button type="button" class="nav-link" data-heat="newUsers">Yangi user</button></li>' +
+      "</ul></div>" +
+      '<div class="card-body"><div id="z-heat-grid" class="zon-heat"></div>' +
+      '<div class="zon-heat-stats mt-4" id="z-heat-stats"></div></div></div>' +
       '<div class="row g-6 mb-6">' +
       '<div class="col-12 col-xl-8"><div class="card h-100"><div class="card-header"><h5 class="card-title mb-0">So\'nggi 7 kun — o\'sish</h5></div>' +
       '<div class="card-body"><div id="z-chart-trend"></div></div></div></div>' +
@@ -289,6 +506,7 @@
 
     // charts after DOM paint
     setTimeout(function () {
+      bindHeatmap(data);
       renderCharts(data);
     }, 0);
   }

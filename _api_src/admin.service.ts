@@ -115,6 +115,7 @@ export class AdminService {
       [news],
       [push],
       daily,
+      calendar,
     ] = await Promise.all([
       this.db.query(
         `SELECT COUNT(*)::int AS total,
@@ -171,6 +172,20 @@ export class AdminService {
                 (SELECT COUNT(*) FROM game_territory t WHERE t.captured_at::date = d)::int AS territories,
                 (SELECT COUNT(*) FROM game_user_achievement a WHERE a.unlocked_at::date = d)::int AS unlocks
            FROM generate_series(CURRENT_DATE - 6, CURRENT_DATE, interval '1 day') AS d
+           ORDER BY 1`,
+      ),
+      // 16 weeks, Monday-aligned (PostgreSQL date_trunc('week') = Monday)
+      this.db.query(
+        `SELECT d::date AS day,
+                (SELECT COUNT(*) FROM sys_user u WHERE u.dateofcreated::date = d)::int AS new_users,
+                (SELECT COUNT(*) FROM game_free_run r WHERE r.started_at::date = d)::int AS runs,
+                (SELECT COALESCE(SUM(distance_km), 0) FROM game_free_run r WHERE r.started_at::date = d)::float AS km,
+                (SELECT COALESCE(SUM(steps), 0) FROM game_step_activity s WHERE s.started_at::date = d)::bigint AS steps
+           FROM generate_series(
+                  (date_trunc('week', CURRENT_DATE::timestamp) - interval '15 weeks')::date,
+                  CURRENT_DATE,
+                  interval '1 day'
+                ) AS d
            ORDER BY 1`,
       ),
     ]);
@@ -230,6 +245,21 @@ export class AdminService {
         steps: Number(r.steps),
         territories: Number(r.territories),
         unlocks: Number(r.unlocks),
+      })),
+      activityCalendar: (
+        calendar as Array<{
+          day: Date;
+          new_users: number;
+          runs: number;
+          km: number;
+          steps: number;
+        }>
+      ).map((r) => ({
+        day: formatIso(new Date(r.day)).slice(0, 10),
+        newUsers: Number(r.new_users),
+        runs: Number(r.runs),
+        distanceKm: Number(r.km),
+        steps: Number(r.steps),
       })),
     };
   }
