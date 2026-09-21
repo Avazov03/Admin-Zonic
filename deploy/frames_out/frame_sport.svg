@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="ring" x1="70" y1="70" x2="442" y2="442" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFCCBC"/>
+      <stop offset="35%" stop-color="#FF8A65"/>
+      <stop offset="70%" stop-color="#E64A19"/>
+      <stop offset="100%" stop-color="#FF8A65"/>
+    </linearGradient>
+    <filter id="glow"><feDropShadow dx="0" dy="0" stdDeviation="10" flood-color="#FF8A65" flood-opacity="0.7"/></filter>
+  </defs>
+  <rect width="512" height="512" fill="#05070B"/>
+  <circle cx="256" cy="256" r="210" fill="#E64A19" opacity="0.12"/>
+  <circle cx="256" cy="256" r="188" fill="none" stroke="url(#ring)" stroke-width="34" filter="url(#glow)"/>
+  <circle cx="256" cy="256" r="188" fill="none" stroke="#FFCCBC" stroke-width="8" opacity="0.55"/>
+  <circle cx="256" cy="256" r="166" fill="none" stroke="#FF8A65" stroke-width="2" opacity="0.5"/>
+  <circle cx="256" cy="256" r="148" fill="#0A0C10"/>
+  <circle cx="256" cy="256" r="142" fill="none" stroke="#FF8A65" stroke-width="1" opacity="0.25"/>
+  <path d="M168 150 A130 130 0 0 1 344 150" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" opacity="0.28"/>
+  
+  
+</svg>

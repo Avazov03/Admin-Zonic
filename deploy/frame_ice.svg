@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <radialGradient id="bgGlow" cx="50%" cy="42%" r="55%">
+      <stop offset="0%" stop-color="#B8F1FF" stop-opacity="0.45"/>
+      <stop offset="55%" stop-color="#3A8FB7" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#061018" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="iceRing" x1="80" y1="80" x2="432" y2="432" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#F5FDFF"/>
+      <stop offset="18%" stop-color="#A8E8FF"/>
+      <stop offset="42%" stop-color="#4FC3F7"/>
+      <stop offset="68%" stop-color="#81D4FA"/>
+      <stop offset="100%" stop-color="#1565C0"/>
+    </linearGradient>
+    <linearGradient id="iceShine" x1="420" y1="90" x2="100" y2="420" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.95"/>
+      <stop offset="45%" stop-color="#B3E5FC" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#0277BD" stop-opacity="0.75"/>
+    </linearGradient>
+    <linearGradient id="crystal" x1="256" y1="40" x2="256" y2="120" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="55%" stop-color="#81D4FA"/>
+      <stop offset="100%" stop-color="#0288D1"/>
+    </linearGradient>
+    <filter id="glow" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="0" stdDeviation="10" flood-color="#4FC3F7" flood-opacity="0.65"/>
+      <feDropShadow dx="0" dy="6" stdDeviation="14" flood-color="#01579B" flood-opacity="0.4"/>
+    </filter>
+    <filter id="softBlur">
+      <feGaussianBlur stdDeviation="1.2"/>
+    </filter>
+  </defs>
+
+  <!-- dark circular stage -->
+  <rect width="512" height="512" rx="64" fill="#050B12"/>
+  <circle cx="256" cy="256" r="230" fill="url(#bgGlow)"/>
+
+  <!-- outer frost halo -->
+  <circle cx="256" cy="256" r="208" fill="none" stroke="#81D4FA" stroke-width="3" opacity="0.25" filter="url(#softBlur)"/>
+
+  <!-- main ring (PUBG-like circular frame) -->
+  <circle cx="256" cy="256" r="188" fill="none" stroke="url(#iceRing)" stroke-width="34" filter="url(#glow)"/>
+  <circle cx="256" cy="256" r="188" fill="none" stroke="url(#iceShine)" stroke-width="12" opacity="0.85"/>
+  <circle cx="256" cy="256" r="168" fill="none" stroke="#E1F5FE" stroke-width="2.5" opacity="0.7"/>
+  <circle cx="256" cy="256" r="158" fill="none" stroke="#4FC3F7" stroke-width="1.5" opacity="0.35"/>
+
+  <!-- avatar window -->
+  <circle cx="256" cy="256" r="148" fill="#071018" stroke="#1A3A52" stroke-width="3"/>
+  <circle cx="256" cy="256" r="142" fill="none" stroke="#4FC3F7" stroke-width="1" opacity="0.25"/>
+
+  <!-- ice shards around ring -->
+  <g fill="url(#crystal)" stroke="#E3F2FD" stroke-width="1" opacity="0.95">
+    <!-- top -->
+    <path d="M256 42 L268 78 L256 70 L244 78 Z"/>
+    <path d="M256 48 L262 72 L256 66 L250 72 Z" fill="#FFFFFF" opacity="0.8"/>
+    <!-- top-right -->
+    <path d="M378 78 L392 108 L372 100 L368 118 Z"/>
+    <!-- right -->
+    <path d="M456 256 L422 244 L430 256 L422 268 Z"/>
+    <!-- bottom-right -->
+    <path d="M378 434 L368 404 L388 412 L392 394 Z"/>
+    <!-- bottom -->
+    <path d="M256 470 L244 434 L256 442 L268 434 Z"/>
+    <!-- bottom-left -->
+    <path d="M134 434 L120 404 L140 412 L144 394 Z"/>
+    <!-- left -->
+    <path d="M56 256 L90 244 L82 256 L90 268 Z"/>
+    <!-- top-left -->
+    <path d="M134 78 L120 108 L140 100 L144 118 Z"/>
+  </g>
+
+  <!-- frost sparkles -->
+  <g fill="#FFFFFF">
+    <circle cx="196" cy="140" r="2.2" opacity="0.9"/>
+    <circle cx="320" cy="148" r="1.8" opacity="0.75"/>
+    <circle cx="360" cy="220" r="2" opacity="0.85"/>
+    <circle cx="340" cy="340" r="1.6" opacity="0.7"/>
+    <circle cx="180" cy="350" r="2.1" opacity="0.8"/>
+    <circle cx="152" cy="230" r="1.7" opacity="0.75"/>
+  </g>
+
+  <!-- icy highlight arc -->
+  <path d="M160 150 A140 140 0 0 1 360 150" fill="none" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" opacity="0.35"/>
+</svg>
