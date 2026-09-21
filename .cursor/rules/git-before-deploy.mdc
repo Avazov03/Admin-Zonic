@@ -1,16 +1,18 @@
 ---
-description: Always commit and push to GitHub before any server deploy
+description: Always commit and push to GitHub before any server deploy (after user approval)
 alwaysApply: true
 ---
 
 # Git before deploy
 
-Before deploying anything to the server (scp, ssh, rsync, pm2 restart, `/var/www/zonic-admin`, API rebuild):
+When the user **approves** commit/push/deploy (see `ask-commit-push-deploy.mdc`):
 
 1. Stage relevant project changes (never secrets: `.env`, keys, pem, hardcoded passwords).
 2. Create a clear, detailed commit message (why + what).
-3. `git push` to GitHub (`origin`).
+3. `git push` to GitHub (`origin` → `Avazov03/Admin-Zonic`).
 4. Only then deploy to the server.
 
-Do not deploy-only and leave git behind. If the working tree is clean, say so and deploy. If push fails, fix auth/remote before deploying.
+Do not deploy-only and leave git behind. If push fails, fix auth/remote before deploying.
+
+Default behavior: **ask first** — do not auto-run unless the user said to.
 ---

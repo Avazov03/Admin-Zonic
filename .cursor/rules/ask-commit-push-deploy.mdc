@@ -1,0 +1,39 @@
+---
+description: After code changes always ask commit/push/deploy; confirm with checklist
+alwaysApply: true
+---
+
+# Prompt → change → ask → confirm
+
+Whenever the user's prompt causes **any project change** (code, config, CSS/JS, API, DB script that affects production, etc.):
+
+## 1. Do the work first
+Implement the requested change.
+
+## 2. Always ask (do not skip)
+Before finishing, **ask explicitly** in Uzbek (or the user's language):
+
+> Commit + `git push` (Avazov03/Admin-Zonic) + serverga deploy qilaymi?
+
+Do **not** auto-commit, push, or deploy unless they clearly say yes (`ha`, `qil`, `ok`, `commit qil`, etc.).
+
+## 3. If they say yes — do all three in order
+1. Detailed git commit (no secrets)
+2. `git push origin main` → `git@github.com:Avazov03/Admin-Zonic.git` (or HTTPS origin)
+3. Deploy to server (`ubuntu@18.197.174.196`, admin UI `/var/www/zonic-admin`, API via pm2 if needed)
+
+## 4. Confirm with a checklist
+After success, reply with a short confirmation and marks, e.g.:
+
+- [x] O‘zgarish qilindi  
+- [x] Commit  
+- [x] Git push  
+- [x] Server deploy  
+
+If something was skipped or failed, show `[ ]` and say why.
+
+## Exceptions
+- Pure questions / explanations with **no** project edits → no ask.
+- User already said in the same message “commit push deploy qil” → do it without re-asking.
+- Never commit passwords, keys, or `.env`.
+---
