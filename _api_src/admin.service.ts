@@ -96,10 +96,29 @@ export class AdminService {
   async me(userId: string) {
     const user = await this.users.findOne({
       where: { id: userId },
-      select: { id: true, username: true, isAdmin: true },
+      select: { id: true, username: true, isAdmin: true, avatarFileId: true },
     });
     if (!user) throw new NotFoundException('User not found.');
-    return { userId: user.id, username: user.username, isAdmin: user.isAdmin };
+    return {
+      userId: user.id,
+      username: user.username,
+      isAdmin: user.isAdmin,
+      avatarFileId: user.avatarFileId ?? null,
+    };
+  }
+
+  /** Same disk layout as /UserProfile/UploadAvatar so DownloadAvatar works. */
+  async saveAvatar(userId: string, file: UploadedImage | undefined): Promise<{ fileId: string }> {
+    if (!file?.buffer?.length) throw badRequest(['No file uploaded (field "file").']);
+    const ext = MIME_TO_EXT[file.mimetype];
+    if (!ext) throw badRequest(['Unsupported image type. Use JPG, PNG, WEBP or GIF.']);
+    if (file.buffer.length > 5 * 1024 * 1024) throw badRequest(['Avatar max 5 MB.']);
+    const avatarDir = join(process.cwd(), 'uploads', 'avatars');
+    mkdirSync(avatarDir, { recursive: true });
+    const fileId = `${randomUUID()}${ext}`;
+    writeFileSync(join(avatarDir, fileId), file.buffer);
+    await this.users.update({ id: userId }, { avatarFileId: fileId });
+    return { fileId };
   }
 
   // ─── Dashboard ───────────────────────────────────────────────────────────

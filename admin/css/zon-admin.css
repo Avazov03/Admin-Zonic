@@ -346,3 +346,15 @@ div[class*="buy-now"] {
 }
 .zon-day-metrics span { display: block; font-size: 0.6875rem; }
 .zon-day-user .avatar { flex-shrink: 0; }
+
+/* Navbar admin avatar */
+#zon-nav-avatar-toggle,
+#zon-nav-avatar-menu {
+  width: 40px;
+  height: 40px;
+}
+#zon-nav-avatar-toggle .zon-user-avatar,
+#zon-nav-avatar-menu .zon-user-avatar {
+  width: 40px !important;
+  height: 40px !important;
+}

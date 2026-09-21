@@ -84,6 +84,18 @@ export class AdminController {
     return this.admin.me(user.userId);
   }
 
+  @Post('Auth/Avatar')
+  @HttpCode(200)
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Upload current admin avatar (multipart field "file")' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({ schema: { type: 'object', properties: { file: { type: 'string', format: 'binary' } } } })
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 } }))
+  uploadAvatar(@CurrentUser() user: AdminUser, @UploadedFile() file: UploadedImage) {
+    return this.admin.saveAvatar(user.userId, file);
+  }
+
   // ─── 14 Dashboard ────────────────────────────────────────────────────────
   @Get('Dashboard')
   @UseGuards(AdminAuthGuard)

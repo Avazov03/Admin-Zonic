@@ -45,6 +45,9 @@ export class AdminMeDto {
 
   @ApiProperty()
   isAdmin: boolean;
+
+  @ApiPropertyOptional({ nullable: true })
+  avatarFileId?: string | null;
 }
 
 export class PageQueryDto {

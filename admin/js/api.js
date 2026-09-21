@@ -157,6 +157,11 @@
     },
 
     adminMe: () => request("/Admin/Auth/Me", { method: "GET" }),
+    adminUploadAvatar: (file) => {
+      var fd = new FormData();
+      fd.append("file", file);
+      return request("/Admin/Auth/Avatar", { method: "POST", body: fd });
+    },
     adminDashboard: (opts) => {
       const y = opts && opts.year != null ? Number(opts.year) : null;
       const q = y && isFinite(y) ? "?year=" + encodeURIComponent(String(y)) : "";
