@@ -1,0 +1,16 @@
+---
+description: Always commit and push to GitHub before any server deploy
+alwaysApply: true
+---
+
+# Git before deploy
+
+Before deploying anything to the server (scp, ssh, rsync, pm2 restart, `/var/www/zonic-admin`, API rebuild):
+
+1. Stage relevant project changes (never secrets: `.env`, keys, pem, hardcoded passwords).
+2. Create a clear, detailed commit message (why + what).
+3. `git push` to GitHub (`origin`).
+4. Only then deploy to the server.
+
+Do not deploy-only and leave git behind. If the working tree is clean, say so and deploy. If push fails, fix auth/remote before deploying.
+---

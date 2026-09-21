@@ -1,0 +1,24 @@
+---
+description: Zon Admin GitHub remote and server deploy targets
+alwaysApply: true
+---
+
+# Zon Admin — Git + server
+
+## GitHub (doim shu remote)
+- Remote: `origin`
+- URL: `git@github.com:Avazov03/Admin-Zonic.git`
+- Default branch: `main`
+
+Before any server deploy: commit (detailed message) → `git push origin main` → then deploy.
+
+If `origin` is missing: `git remote add origin git@github.com:Avazov03/Admin-Zonic.git`
+
+## Server (deploy)
+- Host: `ubuntu@18.197.174.196`
+- SSH key (local): `%USERPROFILE%\.ssh\zon_deploy_tmp`
+- Admin UI: `/var/www/zonic-admin`
+- API (pm2): `zonic-nest` on `/home/ubuntu/zonic`, port `5065`
+
+Never invent a different GitHub repo; always use `Avazov03/Admin-Zonic`.
+---
