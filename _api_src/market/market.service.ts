@@ -31,11 +31,28 @@ export class MarketService {
   ) {
     this.econ = config.get<EconomyConfig>('economy')!;
     // Mobile should load frames from these public URLs (not local hardcode).
-    this.publicBase = (config.get<string>('PUBLIC_API_BASE') || 'https://admin.zonic.uz/api').replace(/\/$/, '');
-    this.assetBase = (config.get<string>('PUBLIC_ASSET_BASE') || 'https://admin.zonic.uz').replace(/\/$/, '');
+    this.publicBase = (
+      config.get<string>('PUBLIC_API_BASE') ||
+      process.env.PUBLIC_API_BASE ||
+      'https://admin.zonic.uz/api'
+    ).replace(/\/$/, '');
+    this.assetBase = (
+      config.get<string>('PUBLIC_ASSET_BASE') ||
+      process.env.PUBLIC_ASSET_BASE ||
+      'https://zonic.uz'
+    ).replace(/\/$/, '');
   }
 
-  private imageUrl(fileId: string | null | undefined): string | null {
+  private imageUrl(
+    fileId: string | null | undefined,
+    code?: string,
+    category?: string | null,
+  ): string | null {
+    // Frames: prefer static PNG on zonic.uz (HTTPS + CDN-friendly). Old app builds
+    // often only read imageUrl and never assetUrl.
+    if (category === 'frame' && code) {
+      return `${this.assetBase}/frames/${encodeURIComponent(code)}.png`;
+    }
     if (!fileId) return null;
     return `${this.publicBase}/Admin/Image?fileId=${encodeURIComponent(fileId)}`;
   }
@@ -75,7 +92,7 @@ export class MarketService {
       duration: r.duration,
       discountLabel: r.discount_label,
       imageFileId: r.image_file_id ?? null,
-      imageUrl: this.imageUrl(r.image_file_id),
+      imageUrl: this.imageUrl(r.image_file_id, r.code, r.category),
       assetUrl: this.assetUrl(r.code, r.category),
     }));
     return { items };
