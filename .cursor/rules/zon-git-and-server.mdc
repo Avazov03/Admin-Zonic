@@ -19,6 +19,7 @@ If `origin` is missing: `git remote add origin git@github.com:Avazov03/Admin-Zon
 - SSH key (local): `%USERPROFILE%\.ssh\zon_deploy_tmp`
 - Admin UI: `/var/www/zonic-admin`
 - API (pm2): `zonic-nest` on `/home/ubuntu/zonic`, port `5065`
+- Admin panel logins (DB): `Avazov` and `admin` — passwords live in personal agent store `zon-admin-credentials.txt`, never commit them.
 
 Never invent a different GitHub repo; always use `Avazov03/Admin-Zonic`.
 ---
