@@ -92,9 +92,62 @@
     });
   }
 
-  /** Demo billing/pricing — faqat user dropdown tozalanadi; boshqa navbar keyinroq. */
+  /** Demo billing/pricing — faqat user dropdown tozalanadi. */
   function cleanTemplateChrome() {
-    // Til, theme, shortcuts — hozircha tegilmaydi; notifications setupNotifications() da
+    // Til, theme — keyinga; shortcuts setupShortcuts() da
+  }
+
+  var SHORTCUTS = [
+    { href: "index.html", icon: "bx-home-smile", label: "Boshqaruv", sub: "Dashboard" },
+    { href: "app-user-list.html", icon: "bx-user", label: "Foydalanuvchilar", sub: "Ro‘yxat" },
+    { href: "app-zon-events.html", icon: "bx-calendar-event", label: "Musobaqalar", sub: "Eventlar" },
+    { href: "app-zon-market.html", icon: "bx-store", label: "Market", sub: "Mahsulotlar" },
+    { href: "app-zon-news.html", icon: "bx-news", label: "Yangiliklar", sub: "News" },
+    { href: "app-zon-push.html", icon: "bx-bell", label: "Push", sub: "Xabarlar" },
+    { href: "app-zon-map.html", icon: "bx-map-alt", label: "Xarita", sub: "Hududlar" },
+    { href: "app-zon-badges.html", icon: "bx-trophy", label: "Yutuqlar", sub: "Badge" },
+  ];
+
+  function setupShortcuts() {
+    var root = document.querySelector(".dropdown-shortcuts");
+    if (!root || root.getAttribute("data-zon-shortcuts") === "1") return;
+    root.setAttribute("data-zon-shortcuts", "1");
+
+    var addBtn = root.querySelector(".dropdown-shortcuts-add");
+    if (addBtn) addBtn.style.display = "none";
+
+    var list = root.querySelector(".dropdown-shortcuts-list");
+    if (!list) return;
+
+    var html = "";
+    for (var i = 0; i < SHORTCUTS.length; i += 2) {
+      html += '<div class="row row-bordered overflow-visible g-0">';
+      for (var j = i; j < i + 2 && j < SHORTCUTS.length; j++) {
+        var s = SHORTCUTS[j];
+        html +=
+          '<div class="dropdown-shortcuts-item col">' +
+          '<span class="dropdown-shortcuts-icon rounded-circle mb-3">' +
+          '<i class="icon-base bx ' +
+          s.icon +
+          ' icon-26px text-heading"></i></span>' +
+          '<a href="' +
+          s.href +
+          '" class="stretched-link">' +
+          esc(s.label) +
+          "</a>" +
+          "<small>" +
+          esc(s.sub) +
+          "</small></div>";
+      }
+      html += "</div>";
+    }
+    list.innerHTML = html;
+
+    var title = root.querySelector("[data-zon-i18n='shortcuts.title'], .dropdown-header h6, .dropdown-menu-header h6");
+    if (title) {
+      title.removeAttribute("data-zon-i18n");
+      title.textContent = "Tezkor havolalar";
+    }
   }
 
   function notifStorageKey(kind, username) {
@@ -532,6 +585,7 @@
     splitMenu();
     cleanTemplateChrome();
     if (!isAuth) {
+      setupShortcuts();
       setupNavbarUser();
       // notifications setupNavbarUser ichida adminMe dan keyin
     }
