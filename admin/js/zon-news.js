@@ -16,13 +16,13 @@
       '<div class="card">' +
       '<div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-3">' +
       '<div><h5 class="card-title mb-1">Yangiliklar</h5>' +
-      '<p class="mb-0 text-body-secondary small">Holat va tur bo‘yicha filtr</p></div>' +
+      '<p class="mb-0 text-body-secondary small">E’lon bilan yuborilgan app bildirishnoma (sahifa view yo‘q)</p></div>' +
       '<button type="button" class="btn btn-primary" id="z-new">Yangi</button></div>' +
       '<div id="z-alert" class="px-6 pt-4"></div>' +
       '<div class="card-body pt-0">' +
       '<ul class="nav nav-pills mb-4 flex-wrap gap-1" id="z-filters" role="tablist"></ul>' +
       '<div class="table-responsive"><table class="table table-hover">' +
-      "<thead><tr><th></th><th>Tur</th><th>Sarlavha</th><th>Holat</th><th>Sana</th><th></th></tr></thead>" +
+      "<thead><tr><th></th><th>Tur</th><th>Sarlavha</th><th>Holat</th><th>Bildirishnoma</th><th>Sana</th><th></th></tr></thead>" +
       '<tbody id="z-body"></tbody></table></div></div></div>' +
       formModal();
 
@@ -145,6 +145,20 @@
       })
       .join("");
   }
+  function notifCell(n) {
+    var sent = Number(n.notifSent || 0);
+    var read = Number(n.notifRead || 0);
+    if (!sent) return '<span class="text-body-secondary" title="Faqat push/e’lon bilan yuborilganda">—</span>';
+    return (
+      '<span class="fw-medium">' +
+      U.n(read) +
+      "</span> / " +
+      U.n(sent) +
+      ' <small class="text-body-secondary">(' +
+      Math.round((read / sent) * 100) +
+      "%)</small>"
+    );
+  }
   function renderTable() {
     var items = allItems.filter(bucket).slice().sort(function (a, b) {
       var da = new Date(a.publishedAt || a.createdAt || 0).getTime();
@@ -153,7 +167,7 @@
     });
     var body = document.getElementById("z-body");
     if (!items.length) {
-      body.innerHTML = '<tr><td colspan="6" class="text-body-secondary">Yangilik yo\'q</td></tr>';
+      body.innerHTML = '<tr><td colspan="7" class="text-body-secondary">Yangilik yo\'q</td></tr>';
       return;
     }
     body.innerHTML = items
@@ -167,6 +181,8 @@
           U.esc(n.title) +
           "</span></td><td>" +
           (n.isPublished ? U.badge("E'lon", "success") : U.badge("Qoralama", "secondary")) +
+          "</td><td>" +
+          notifCell(n) +
           "</td><td>" +
           U.day(n.publishedAt || n.createdAt) +
           '</td><td class="text-nowrap">' +
@@ -187,10 +203,23 @@
         allItems = (data && data.items) || [];
         window.__news = allItems;
         var c = counts();
+        var nSent = allItems.reduce(function (a, b) {
+          return a + Number(b.notifSent || 0);
+        }, 0);
+        var nRead = allItems.reduce(function (a, b) {
+          return a + Number(b.notifRead || 0);
+        }, 0);
         document.getElementById("z-stats").innerHTML =
           U.statCard("Jami", U.n(c.all), "Yozuv", "bx-news", "primary") +
           U.statCard("E'lon", U.n(c.published), "Ko'rinadi", "bx-check-circle", "success") +
-          U.statCard("Qoralama", U.n(c.draft), "Yashirin", "bx-file", "warning");
+          U.statCard("Qoralama", U.n(c.draft), "Yashirin", "bx-file", "warning") +
+          U.statCard(
+            "O‘qildi",
+            U.n(nRead) + (nSent ? " / " + U.n(nSent) : ""),
+            "App bildirishnoma",
+            "bx-envelope-open",
+            "info"
+          );
         renderFilters();
         renderTable();
       })

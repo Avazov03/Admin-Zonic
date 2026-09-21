@@ -529,7 +529,11 @@ export class AdminService {
     const rows = await this.db.query(
       `SELECT e.id::text, e.title, e.description, e.goal_type, e.goal_value, e.starts_at, e.ends_at,
               e.status, e.created_at,
-              (SELECT COUNT(*) FROM game_event_participant p WHERE p.event_id = e.id)::int AS participants
+              (SELECT COUNT(*) FROM game_event_participant p WHERE p.event_id = e.id)::int AS participants,
+              (SELECT COUNT(*) FROM game_notification n
+                WHERE n.type = 'event' AND n.payload->>'eventId' = e.id::text)::int AS notif_sent,
+              (SELECT COUNT(*) FROM game_notification n
+                WHERE n.type = 'event' AND n.payload->>'eventId' = e.id::text AND n.is_read)::int AS notif_read
          FROM game_event e ORDER BY e.created_at DESC`,
     );
     return { items: rows.map((r) => this.mapEvent(r)) };
@@ -685,8 +689,16 @@ export class AdminService {
 
   async pushHistory(page: number, pageSize: number) {
     const rows = await this.db.query(
-      `SELECT id::text, title, body, audience, sent_count, created_at
-         FROM admin_push_campaign ORDER BY created_at DESC
+      `SELECT p.id::text, p.title, p.body, p.audience, p.sent_count, p.created_at,
+              (SELECT COUNT(*) FROM game_notification n
+                WHERE n.type = 'system' AND n.title = p.title
+                  AND n.created_at >= p.created_at - interval '1 minute'
+                  AND n.created_at <= p.created_at + interval '30 minutes')::int AS notif_sent,
+              (SELECT COUNT(*) FROM game_notification n
+                WHERE n.type = 'system' AND n.title = p.title AND n.is_read
+                  AND n.created_at >= p.created_at - interval '1 minute'
+                  AND n.created_at <= p.created_at + interval '30 minutes')::int AS notif_read
+         FROM admin_push_campaign p ORDER BY p.created_at DESC
         LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`,
     );
     const [{ cnt }] = await this.db.query(`SELECT COUNT(*)::int AS cnt FROM admin_push_campaign`);
@@ -700,6 +712,8 @@ export class AdminService {
         body: r.body,
         audience: r.audience,
         sentCount: Number(r.sent_count),
+        notifSent: Number(r.notif_sent ?? 0),
+        notifRead: Number(r.notif_read ?? 0),
         createdAt: formatIso(new Date(r.created_at as Date)),
       })),
     };
@@ -927,8 +941,16 @@ export class AdminService {
   // ─── News ────────────────────────────────────────────────────────────────
   async listAdminNews() {
     const rows = await this.db.query(
-      `SELECT id::text, type, title, body, image_file_id, is_published, published_at, created_at
-         FROM game_news ORDER BY created_at DESC`,
+      `SELECT n.id::text, n.type, n.title, n.body, n.image_file_id, n.is_published, n.published_at, n.created_at,
+              (SELECT COUNT(*) FROM game_notification gn
+                WHERE gn.title = n.title
+                  AND gn.created_at >= COALESCE(n.published_at, n.created_at) - interval '1 minute'
+                  AND gn.created_at <= COALESCE(n.published_at, n.created_at) + interval '30 minutes')::int AS notif_sent,
+              (SELECT COUNT(*) FROM game_notification gn
+                WHERE gn.title = n.title AND gn.is_read
+                  AND gn.created_at >= COALESCE(n.published_at, n.created_at) - interval '1 minute'
+                  AND gn.created_at <= COALESCE(n.published_at, n.created_at) + interval '30 minutes')::int AS notif_read
+         FROM game_news n ORDER BY n.created_at DESC`,
     );
     return { items: rows.map((r) => this.mapNews(r)) };
   }
@@ -1318,6 +1340,8 @@ export class AdminService {
       endsAt: formatIso(new Date(r.ends_at as Date)),
       status: r.status,
       participantCount: Number(r.participants ?? 0),
+      notifSent: Number(r.notif_sent ?? 0),
+      notifRead: Number(r.notif_read ?? 0),
       createdAt: formatIso(new Date(r.created_at as Date)),
     };
   }
@@ -1365,6 +1389,8 @@ export class AdminService {
       isPublished: r.is_published,
       publishedAt: r.published_at ? formatIso(new Date(r.published_at as Date)) : null,
       createdAt: formatIso(new Date(r.created_at as Date)),
+      notifSent: Number(r.notif_sent ?? 0),
+      notifRead: Number(r.notif_read ?? 0),
     };
   }
 }

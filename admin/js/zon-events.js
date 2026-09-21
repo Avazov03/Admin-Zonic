@@ -16,13 +16,13 @@
       '<div class="card">' +
       '<div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-3">' +
       '<div><h5 class="card-title mb-1">Musobaqalar</h5>' +
-      '<p class="mb-0 text-body-secondary small">Holat bo‘yicha filtr</p></div>' +
+      '<p class="mb-0 text-body-secondary small">Ishtirokchilar + app bildirishnoma o‘qilishi</p></div>' +
       '<button type="button" class="btn btn-primary" id="z-new">Yangi musobaqa</button></div>' +
       '<div id="z-alert" class="px-6 pt-4"></div>' +
       '<div class="card-body pt-0">' +
       '<ul class="nav nav-pills mb-4 flex-wrap gap-1" id="z-filters" role="tablist"></ul>' +
       '<div class="table-responsive"><table class="table table-hover">' +
-      "<thead><tr><th>Nomi</th><th>Maqsad</th><th>Muddat</th><th>Ishtirokchi</th><th>Holat</th><th></th></tr></thead>" +
+      "<thead><tr><th>Nomi</th><th>Maqsad</th><th>Muddat</th><th>Ishtirokchi</th><th>Bildirishnoma</th><th>Holat</th><th></th></tr></thead>" +
       '<tbody id="z-body"></tbody></table></div></div></div>' +
       formModal() +
       partsModal();
@@ -178,13 +178,28 @@
       })
       .join("");
   }
+  function notifCell(ev) {
+    var sent = Number(ev.notifSent || 0);
+    var read = Number(ev.notifRead || 0);
+    if (!sent) return '<span class="text-body-secondary">—</span>';
+    var pct = Math.round((read / sent) * 100);
+    return (
+      '<span class="fw-medium">' +
+      U.n(read) +
+      "</span> / " +
+      U.n(sent) +
+      ' <small class="text-body-secondary">(' +
+      pct +
+      "% o‘qildi)</small>"
+    );
+  }
   function renderTable() {
     var items = filtered().sort(function (a, b) {
       return new Date(b.startsAt || 0) - new Date(a.startsAt || 0);
     });
     var body = document.getElementById("z-body");
     if (!items.length) {
-      body.innerHTML = '<tr><td colspan="6" class="text-body-secondary">Bu filterda musobaqa yo\'q</td></tr>';
+      body.innerHTML = '<tr><td colspan="7" class="text-body-secondary">Bu filterda musobaqa yo\'q</td></tr>';
       return;
     }
     body.innerHTML = items
@@ -211,8 +226,10 @@
           U.dt(ev.startsAt) +
           "<br>" +
           U.dt(ev.endsAt) +
-          "</small></td><td>" +
+          "</small></td><td><span class=\"fw-semibold\">" +
           U.n(ev.participantCount) +
+          "</span></td><td>" +
+          notifCell(ev) +
           "</td><td>" +
           statusBadge(ev.status) +
           '</td><td class="text-nowrap">' +
@@ -232,24 +249,31 @@
   function load() {
     setAlert("", "");
     document.getElementById("z-body").innerHTML =
-      '<tr><td colspan="6" class="text-body-secondary">Yuklanmoqda…</td></tr>';
+      '<tr><td colspan="7" class="text-body-secondary">Yuklanmoqda…</td></tr>';
     ZonApi.get("/Admin/Events")
       .then(function (data) {
         allItems = (data && data.items) || [];
         window.__events = allItems;
         var c = counts();
+        var parts = allItems.reduce(function (a, b) {
+          return a + Number(b.participantCount || 0);
+        }, 0);
+        var nSent = allItems.reduce(function (a, b) {
+          return a + Number(b.notifSent || 0);
+        }, 0);
+        var nRead = allItems.reduce(function (a, b) {
+          return a + Number(b.notifRead || 0);
+        }, 0);
         document.getElementById("z-stats").innerHTML =
           U.statCard("Jami", U.n(c.all), "Musobaqa", "bx-calendar-event", "primary") +
           U.statCard("Aktiv", U.n(c.active), "Hozir", "bx-play-circle", "success") +
-          U.statCard("Tugagan", U.n(c.ended), "Yakunlangan", "bx-flag", "secondary") +
+          U.statCard("Ishtirokchilar", U.n(parts), "Qo‘shilgan", "bx-group", "info") +
           U.statCard(
-            "Ishtirokchilar",
-            U.n(allItems.reduce(function (a, b) {
-              return a + Number(b.participantCount || 0);
-            }, 0)),
-            "Jami",
-            "bx-group",
-            "info"
+            "O‘qilgan",
+            U.n(nRead) + (nSent ? " / " + U.n(nSent) : ""),
+            "App bildirishnoma",
+            "bx-envelope-open",
+            "warning"
           );
         renderFilters();
         renderTable();
@@ -294,9 +318,21 @@
     }
     if (parts) {
       var eid = parts.getAttribute("data-parts");
+      var evMeta =
+        (window.__events || []).find(function (x) {
+          return x.id === eid;
+        }) || {};
       ZonApi.get("/Admin/Events/" + encodeURIComponent(eid) + "/Participants")
         .then(function (data) {
           var items = (data && data.items) || [];
+          var titleEl = document.querySelector("#zPartsModal .modal-title");
+          if (titleEl) {
+            titleEl.textContent =
+              "Ishtirokchilar (" +
+              items.length +
+              ")" +
+              (evMeta.title ? " — " + evMeta.title : "");
+          }
           document.getElementById("z-parts").innerHTML = items.length
             ? items
                 .map(function (x) {

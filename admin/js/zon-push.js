@@ -32,7 +32,7 @@
       '<div class="card-body pt-0">' +
       '<ul class="nav nav-pills mb-4 flex-wrap gap-1" id="z-filters" role="tablist"></ul>' +
       '<div class="table-responsive"><table class="table table-hover">' +
-      "<thead><tr><th>Sarlavha</th><th>Auditoriya</th><th>Yuborildi</th><th>Sana</th></tr></thead>" +
+      "<thead><tr><th>Sarlavha</th><th>Auditoriya</th><th>Yuborildi</th><th>O‘qildi</th><th>Sana</th></tr></thead>" +
       '<tbody id="z-history"></tbody></table></div>' +
       '<div class="d-flex justify-content-between align-items-center mt-3">' +
       '<div class="btn-group">' +
@@ -136,6 +136,20 @@
     body.innerHTML = items.length
       ? items
           .map(function (x) {
+            var sent = Number(x.sentCount || 0);
+            var nSent = Number(x.notifSent || 0);
+            var nRead = Number(x.notifRead || 0);
+            var readCell = nSent
+              ? "<span class=\"fw-medium\">" +
+                U.n(nRead) +
+                "</span> / " +
+                U.n(nSent) +
+                (nSent
+                  ? ' <small class="text-body-secondary">(' +
+                    Math.round((nRead / nSent) * 100) +
+                    "%)</small>"
+                  : "")
+              : '<span class="text-body-secondary">—</span>';
             return (
               "<tr><td><span class=\"fw-medium\">" +
               U.esc(x.title) +
@@ -143,15 +157,17 @@
               U.esc(x.body || "") +
               "</small></td><td>" +
               audienceBadge(x.audience) +
-              "</td><td>" +
-              U.n(x.sentCount) +
+              "</td><td><span class=\"fw-semibold\">" +
+              U.n(sent) +
+              "</span></td><td>" +
+              readCell +
               "</td><td>" +
               U.dt(x.createdAt) +
               "</td></tr>"
             );
           })
           .join("")
-      : '<tr><td colspan="4" class="text-body-secondary">Tarix bo\'sh</td></tr>';
+      : '<tr><td colspan="5" class="text-body-secondary">Tarix bo\'sh</td></tr>';
     document.getElementById("z-meta").textContent = totalAll ? "Jami " + U.n(totalAll) : "";
     document.getElementById("z-prev").disabled = page <= 1;
     document.getElementById("z-next").disabled = page * pageSize >= totalAll;
@@ -162,9 +178,22 @@
         allItems = (data && data.items) || [];
         totalAll = Number(data.total || 0);
         var c = counts();
+        var nRead = allItems.reduce(function (a, b) {
+          return a + Number(b.notifRead || 0);
+        }, 0);
+        var nSent = allItems.reduce(function (a, b) {
+          return a + Number(b.notifSent || 0);
+        }, 0);
         document.getElementById("z-stats").innerHTML =
-          U.statCard("Tarix", U.n(totalAll), "Yuboruv", "bx-bell", "primary") +
-          U.statCard("Shu sahifa", U.n(c.sent), "Qabul qiluvchi", "bx-send", "success") +
+          U.statCard("Tarix", U.n(totalAll), "Kampaniya", "bx-bell", "primary") +
+          U.statCard("Yuborildi", U.n(c.sent), "Shu sahifa", "bx-send", "success") +
+          U.statCard(
+            "O‘qildi",
+            U.n(nRead) + (nSent ? " / " + U.n(nSent) : ""),
+            "App inbox",
+            "bx-envelope-open",
+            "info"
+          ) +
           U.statCard("Nofaol", U.n(c.tabs.inactive_3d), "3 kun", "bx-time-five", "warning");
         renderFilters();
         renderHistory();
