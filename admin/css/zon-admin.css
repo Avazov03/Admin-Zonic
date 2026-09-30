@@ -217,23 +217,8 @@ div[class*="buy-now"] {
 
 /* Activity calendar heatmap (GitHub-style) */
 .zon-heat { overflow-x: auto; padding-bottom: 0.25rem; position: relative; }
-.zon-heat-months {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: 14px;
-  gap: 3px;
-  margin: 0 0 0.35rem 2.25rem;
-  min-width: max-content;
-}
-.zon-heat-wrap.is-month .zon-heat-months { grid-auto-columns: 18px; }
-.zon-heat-month {
-  font-size: 0.6875rem;
-  color: var(--bs-secondary-color, #a5a3ae);
-  line-height: 1;
-  height: 0.9rem;
-  white-space: nowrap;
-  overflow: visible;
-}
+/* --zh-cell is set from JS so the whole year fits the card width */
+.zon-heat-wrap { --zh-cell: 14px; --zh-gap: 3px; }
 .zon-heat-body {
   display: flex;
   gap: 0.5rem;
@@ -242,38 +227,44 @@ div[class*="buy-now"] {
 }
 .zon-heat-ydays {
   display: grid;
-  grid-template-rows: repeat(7, 14px);
-  gap: 3px;
+  grid-template-rows: repeat(7, var(--zh-cell));
+  gap: var(--zh-gap);
+  margin-top: 1.25rem;
   font-size: 0.625rem;
   color: var(--bs-secondary-color, #a5a3ae);
-  line-height: 14px;
+  line-height: var(--zh-cell);
   width: 1.75rem;
   flex-shrink: 0;
+}
+/* Month blocks sit exactly one cell apart */
+.zon-heat-blocks {
+  display: flex;
+  gap: var(--zh-cell);
+  align-items: flex-start;
+}
+.zon-heat-mblock { display: flex; flex-direction: column; }
+.zon-heat-month {
+  font-size: 0.6875rem;
+  color: var(--bs-secondary-color, #a5a3ae);
+  line-height: 1;
+  height: 0.9rem;
+  margin-bottom: 0.35rem;
+  white-space: nowrap;
 }
 .zon-heat-weeks {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: 14px;
-  gap: 3px;
+  grid-auto-columns: var(--zh-cell);
+  gap: var(--zh-gap);
 }
 .zon-heat-week {
   display: grid;
-  grid-template-rows: repeat(7, 14px);
-  gap: 3px;
+  grid-template-rows: repeat(7, var(--zh-cell));
+  gap: var(--zh-gap);
 }
-.zon-heat-body.is-month .zon-heat-ydays {
-  grid-template-rows: repeat(7, 18px);
-  line-height: 18px;
-}
-.zon-heat-body.is-month .zon-heat-weeks { grid-auto-columns: 18px; }
-.zon-heat-body.is-month .zon-heat-week { grid-template-rows: repeat(7, 18px); }
-.zon-heat-body.is-month .zon-heat-cell {
-  width: 18px;
-  height: 18px;
-}
-.zon-heat-wrap.is-month .zon-heat-legend .zon-heat-cell {
-  width: 14px;
-  height: 14px;
+.zon-heat-weeks .zon-heat-cell {
+  width: var(--zh-cell);
+  height: var(--zh-cell);
 }
 .zon-heat-cell {
   width: 14px;

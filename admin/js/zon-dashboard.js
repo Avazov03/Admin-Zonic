@@ -8,6 +8,7 @@
   var heatData = [];
   var heatYear = new Date().getFullYear();
   var heatMonth = 0; // 0 = whole year
+  var heatLayout = null;
   var availableYears = [];
   var dashCache = null;
   var MONTHS_UZ = ["Yan", "Fev", "Mar", "Apr", "May", "Iyn", "Iyl", "Avg", "Sen", "Okt", "Noy", "Dek"];
@@ -111,10 +112,21 @@
         bestMonth = mk;
       }
     });
+    var now = new Date();
+    var today =
+      now.getFullYear() +
+      "-" +
+      String(now.getMonth() + 1).padStart(2, "0") +
+      "-" +
+      String(now.getDate()).padStart(2, "0");
+    // The calendar covers the whole year, so future days must not break streaks.
+    var past = days.filter(function (d) {
+      return d.day && d.day <= today;
+    });
     var longest = 0;
     var current = 0;
     var run = 0;
-    days.forEach(function (d) {
+    past.forEach(function (d) {
       if (dayValue(d, metric) > 0) {
         run += 1;
         if (run > longest) longest = run;
@@ -122,8 +134,11 @@
         run = 0;
       }
     });
-    for (var i = days.length - 1; i >= 0; i--) {
-      if (dayValue(days[i], metric) > 0) current += 1;
+    var i = past.length - 1;
+    // Today is still in progress: no activity yet shouldn't reset the streak.
+    if (i >= 0 && past[i].day === today && dayValue(past[i], metric) <= 0) i--;
+    for (; i >= 0; i--) {
+      if (dayValue(past[i], metric) > 0) current += 1;
       else break;
     }
     var monthLabel = "—";
@@ -176,89 +191,77 @@
         '</strong></div>' +
         '<div class="zon-heat-stat"><span class="text-body-secondary">Eng uzun streak</span><strong>' +
         stats.longest +
-        "k</strong></div>" +
+        " kun</strong></div>" +
         '<div class="zon-heat-stat"><span class="text-body-secondary">Joriy streak</span><strong>' +
         stats.current +
-        "k</strong></div>";
+        " kun</strong></div>";
     }
 
-    var weeks = [];
-    var cur = null;
+    // Each month is its own block of Monday-first week columns, so month labels
+    // never collide and blocks are separated by exactly one cell.
+    var blocks = [];
+    var byMonth = {};
     days.forEach(function (d) {
-      var dt = new Date(d.day + "T12:00:00");
-      var dow = (dt.getDay() + 6) % 7;
-      if (!cur || dow === 0) {
-        cur = { days: [null, null, null, null, null, null, null] };
-        weeks.push(cur);
+      var mk = d.day.slice(0, 7);
+      var b = byMonth[mk];
+      if (!b) {
+        b = byMonth[mk] = { key: mk, weeks: [], cur: null };
+        blocks.push(b);
       }
-      cur.days[dow] = d;
+      var dow = (new Date(d.day + "T12:00:00").getDay() + 6) % 7;
+      if (!b.cur || dow === 0) {
+        b.cur = [null, null, null, null, null, null, null];
+        b.weeks.push(b.cur);
+      }
+      b.cur[dow] = d;
     });
+    var cols = blocks.reduce(function (s, b) {
+      return s + b.weeks.length;
+    }, 0);
 
-    var monthMarks = [];
-    var lastMonth = "";
-    weeks.forEach(function (w) {
-      var first = w.days.find(function (x) {
-        return x && x.day;
-      });
-      if (!first) {
-        monthMarks.push("");
-        return;
-      }
-      var m = first.day.slice(0, 7);
-      if (m !== lastMonth) {
-        lastMonth = m;
-        monthMarks.push(MONTHS_UZ[Number(first.day.slice(5, 7)) - 1] || "");
-      } else {
-        monthMarks.push("");
-      }
-    });
-
-    var sizeClass = heatMonth > 0 ? " is-month" : " is-year";
     var html =
       '<div class="zon-heat-wrap' +
-      sizeClass +
-      '"><div class="zon-heat-months">' +
-      monthMarks
-        .map(function (m) {
-          return '<span class="zon-heat-month">' + m + "</span>";
-        })
-        .join("") +
-      "</div>" +
-      '<div class="zon-heat-body' +
-      sizeClass +
-      '">' +
+      (heatMonth > 0 ? " is-month" : " is-year") +
+      '"><div class="zon-heat-body">' +
       '<div class="zon-heat-ydays">' +
       "<span>Du</span><span></span><span>Chor</span><span></span><span>Ju</span><span></span><span>Yak</span>" +
       "</div>" +
-      '<div class="zon-heat-weeks">';
+      '<div class="zon-heat-blocks">';
 
-    weeks.forEach(function (w) {
-      html += '<div class="zon-heat-week">';
-      w.days.forEach(function (d) {
-        if (!d) {
-          html += '<span class="zon-heat-cell is-empty"></span>';
-          return;
-        }
-        var v = dayValue(d, heatMetric);
-        var lvl = heatLevel(v, stats.maxVal);
-        html +=
-          '<span class="zon-heat-cell lvl-' +
-          lvl +
-          '" data-day="' +
-          d.day +
-          '" data-val="' +
-          v +
-          '" data-km="' +
-          (Number(d.distanceKm) || 0) +
-          '" data-runs="' +
-          (Number(d.runs) || 0) +
-          '" data-steps="' +
-          (Number(d.steps) || 0) +
-          '" data-users="' +
-          (Number(d.newUsers) || 0) +
-          '"></span>';
+    blocks.forEach(function (b) {
+      html +=
+        '<div class="zon-heat-mblock"><div class="zon-heat-month">' +
+        (MONTHS_UZ[Number(b.key.slice(5, 7)) - 1] || "") +
+        '</div><div class="zon-heat-weeks">';
+      b.weeks.forEach(function (w) {
+        html += '<div class="zon-heat-week">';
+        w.forEach(function (d) {
+          if (!d) {
+            html += '<span class="zon-heat-cell is-empty"></span>';
+            return;
+          }
+          var v = dayValue(d, heatMetric);
+          var lvl = heatLevel(v, stats.maxVal);
+          html +=
+            '<span class="zon-heat-cell lvl-' +
+            lvl +
+            '" data-day="' +
+            d.day +
+            '" data-val="' +
+            v +
+            '" data-km="' +
+            (Number(d.distanceKm) || 0) +
+            '" data-runs="' +
+            (Number(d.runs) || 0) +
+            '" data-steps="' +
+            (Number(d.steps) || 0) +
+            '" data-users="' +
+            (Number(d.newUsers) || 0) +
+            '"></span>';
+        });
+        html += "</div>";
       });
-      html += "</div>";
+      html += "</div></div>";
     });
 
     html +=
@@ -270,12 +273,47 @@
       '</div><div id="z-heat-tip" class="zon-heat-tip" hidden></div>';
 
     host.innerHTML = html;
+    heatLayout = { cols: cols, blocks: blocks.length };
+    fitHeatmap();
     bindHeatTip(host);
 
     document.querySelectorAll("[data-heat]").forEach(function (btn) {
       btn.classList.toggle("active", btn.getAttribute("data-heat") === heatMetric);
     });
   }
+
+  function fitHeatmap() {
+    var host = document.getElementById("z-heat-grid");
+    if (!host || !heatLayout || !heatLayout.cols) return;
+    var wrap = host.querySelector(".zon-heat-wrap");
+    var ydays = host.querySelector(".zon-heat-ydays");
+    var body = host.querySelector(".zon-heat-body");
+    if (!wrap || !ydays || !body) return;
+    var bodyGap = parseFloat(getComputedStyle(body).columnGap) || 0;
+    var avail = host.clientWidth - ydays.offsetWidth - bodyGap - 2;
+    var cols = heatLayout.cols;
+    var blocks = heatLayout.blocks;
+    var max = heatMonth > 0 ? 22 : 18;
+    // cols cells + (cols - blocks) inner gaps + (blocks - 1) one-cell month gaps
+    function size(gap) {
+      return Math.floor((avail - (cols - blocks) * gap) / (cols + blocks - 1));
+    }
+    var gap = 3;
+    var cell = size(gap);
+    if (cell < 12) {
+      gap = 2;
+      cell = size(gap);
+    }
+    cell = Math.max(8, Math.min(max, cell));
+    wrap.style.setProperty("--zh-cell", cell + "px");
+    wrap.style.setProperty("--zh-gap", gap + "px");
+  }
+
+  var heatResizeTimer = null;
+  window.addEventListener("resize", function () {
+    clearTimeout(heatResizeTimer);
+    heatResizeTimer = setTimeout(fitHeatmap, 120);
+  });
 
   function bindHeatTip(host) {
     var tip = document.getElementById("z-heat-tip");
