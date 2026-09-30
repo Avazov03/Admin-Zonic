@@ -889,24 +889,64 @@ export class AdminService {
     return { ok: true };
   }
 
+  /** Participants with their progress inside the event window (runs km or steps), best first. */
   async eventParticipants(id: string) {
-    await this.requireEvent(id);
+    const ev = await this.requireEvent(id);
+    const isSteps = ev.goal_type === 'steps';
+    const goal = Number(ev.goal_value) || 0;
+    const progressSql = isSteps
+      ? `(SELECT COALESCE(SUM(s.steps), 0) FROM game_step_activity s
+           WHERE s.user_id = u.id AND s.started_at >= $2 AND s.started_at < $3)::float`
+      : `(SELECT COALESCE(SUM(r.distance_km), 0) FROM game_free_run r
+           WHERE r.user_id = u.id AND r.started_at >= $2 AND r.started_at < $3)::float`;
     const rows = await this.db.query(
-      `SELECT u.id::text, u.username, u.zonic_id, u.avatar_file_id, p.joined_at
+      `SELECT u.id::text, u.username, u.zonic_id, u.avatar_file_id, u.is_blocked,
+              u.region_id, reg.shortname AS region_name, p.joined_at,
+              ${progressSql} AS progress
          FROM game_event_participant p
          JOIN sys_user u ON u.id = p.user_id
+         LEFT JOIN info_region reg ON reg.id = u.region_id
         WHERE p.event_id = $1
-        ORDER BY p.joined_at ASC`,
-      [id],
+        ORDER BY progress DESC, p.joined_at ASC`,
+      [id, ev.starts_at, ev.ends_at],
     );
-    return {
-      items: rows.map((r: Record<string, unknown>) => ({
+    const items = rows.map((r: Record<string, unknown>, i: number) => {
+      const raw = Number(r.progress) || 0;
+      const progress = isSteps ? Math.round(raw) : Math.round(raw * 100) / 100;
+      const rid = r.region_id != null ? Number(r.region_id) : null;
+      return {
+        rank: i + 1,
         userId: r.id,
         username: r.username,
         zonicId: r.zonic_id,
         avatarFileId: r.avatar_file_id,
+        isBlocked: r.is_blocked === true,
+        regionName: rid != null ? regionUz(rid, r.region_name as string) : null,
         joinedAt: formatIso(new Date(r.joined_at as Date)),
-      })),
+        progress,
+        percent: goal > 0 ? Math.min(100, Math.round((raw / goal) * 1000) / 10) : 0,
+        completed: goal > 0 && raw >= goal,
+      };
+    });
+    return {
+      event: {
+        id: ev.id,
+        title: ev.title,
+        goalType: ev.goal_type,
+        goalValue: goal,
+        startsAt: formatIso(new Date(ev.starts_at)),
+        endsAt: formatIso(new Date(ev.ends_at)),
+        status: ev.status,
+      },
+      summary: {
+        participants: items.length,
+        completed: items.filter((x) => x.completed).length,
+        active: items.filter((x) => x.progress > 0).length,
+        avgProgress: items.length
+          ? Math.round((items.reduce((a, x) => a + x.progress, 0) / items.length) * 100) / 100
+          : 0,
+      },
+      items,
     };
   }
 

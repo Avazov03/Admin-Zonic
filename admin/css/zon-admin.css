@@ -796,6 +796,53 @@ a.zon-top5-item:hover { color: inherit; border-color: color-mix(in sRGB, var(--b
   .zon-lb-region { width: 100%; }
 }
 
+/* Event participants */
+.zon-ep-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.75rem; }
+.zon-ep-tile {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--bs-border-color);
+  border-radius: 0.6rem;
+}
+.zon-ep-tile .avatar-initial {
+  width: 2.25rem;
+  height: 2.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 1.15rem;
+}
+.zon-ep-tile-val { font-size: 1.05rem; font-weight: 600; color: var(--bs-heading-color, #5d596c); line-height: 1.3; }
+.zon-ep-search { width: 13rem; max-width: 100%; }
+.zon-ep-check { width: 2rem; }
+.zon-ep-table .min-w-0 { min-width: 0; }
+.zon-ep-table .zon-lb-rank { width: 1.7rem; height: 1.7rem; font-size: 0.75rem; }
+.zon-ep-bar {
+  height: 4px;
+  width: 9rem;
+  max-width: 100%;
+  margin-top: 0.35rem;
+  border-radius: 4px;
+  background: color-mix(in sRGB, var(--bs-primary) 12%, transparent);
+  overflow: hidden;
+}
+.zon-ep-bar span { display: block; height: 100%; border-radius: 4px; background: var(--bs-primary); }
+.zon-ep-bar.is-done span { background: var(--bs-success); }
+.zon-ep-compose {
+  margin-bottom: 1rem;
+  padding: 1rem;
+  border: 1px solid color-mix(in sRGB, var(--bs-primary) 30%, transparent);
+  border-radius: 0.6rem;
+  background: color-mix(in sRGB, var(--bs-primary) 4%, transparent);
+}
+@media (max-width: 767.98px) {
+  .zon-ep-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .zon-ep-search { width: 100%; }
+}
+
 /* Market sales */
 .zon-ms-delta {
   display: inline-flex;
