@@ -532,6 +532,194 @@ export class AdminService {
     return { ok: true };
   }
 
+  /** One-shot admin profile: identity, wallet, lifetime stats, badges, purchases, events, 30-day trend. */
+  async userProfile(id: string) {
+    await this.requireUser(id);
+    const iso = (v: unknown) => (v ? formatIso(new Date(v as Date)) : null);
+    const num = (v: unknown) => Number(v) || 0;
+
+    const [[u], [st], badges, purchases, events, trend] = await Promise.all([
+      this.db.query(
+        `SELECT u.id::text, u.username, u.email, u.phone, u.zonic_id, u.level, u.gender, u.age,
+                u.height_cm, u.weight_kg, u.bio, u.instagram_username, u.strava_url, u.color,
+                u.avatar_file_id, u.cover_file_id, u.country_id, u.region_id,
+                c.shortname AS country_name, reg.shortname AS region_name,
+                u.dateofcreated, u.last_seen_at, u.is_admin, u.is_blocked, u.blocked_at, u.blocked_reason,
+                u.selected_badge_code, u.selected_frame_code, u.step_goal,
+                (u.google_user_id IS NOT NULL) AS via_google, (u.apple_user_id IS NOT NULL) AS via_apple,
+                w.tanga, w.xp, (w.tanga_week = date_trunc('week', CURRENT_DATE)::date) AS tanga_current,
+                w.last_reward_at
+           FROM sys_user u
+           LEFT JOIN info_country c ON c.id = u.country_id
+           LEFT JOIN info_region reg ON reg.id = u.region_id
+           LEFT JOIN game_user_wallet w ON w.user_id = u.id
+          WHERE u.id = $1`,
+        [id],
+      ),
+      this.db.query(
+        `SELECT
+           (SELECT COUNT(*) FROM game_free_run WHERE user_id = $1)::int AS runs,
+           (SELECT COALESCE(SUM(distance_km), 0) FROM game_free_run WHERE user_id = $1)::float AS run_km,
+           (SELECT COALESCE(SUM(duration_seconds), 0) FROM game_free_run WHERE user_id = $1)::bigint AS run_sec,
+           (SELECT COALESCE(MAX(distance_km), 0) FROM game_free_run WHERE user_id = $1)::float AS best_km,
+           (SELECT COALESCE(SUM(steps), 0) FROM game_step_activity WHERE user_id = $1)::bigint AS steps,
+           (SELECT COALESCE(MAX(d), 0) FROM (SELECT SUM(steps) AS d FROM game_step_activity
+                                            WHERE user_id = $1 GROUP BY started_at::date) x)::bigint AS best_steps_day,
+           (SELECT COUNT(*) FROM game_territory WHERE owner_user_id = $1)::int AS territories,
+           (SELECT COALESCE(SUM(area_m2), 0) FROM game_territory WHERE owner_user_id = $1)::float AS area_m2,
+           (SELECT COUNT(*) FROM game_user_achievement WHERE user_id = $1)::int AS badges,
+           (SELECT COUNT(*) FROM game_badge WHERE is_active = true)::int AS badges_total,
+           (SELECT COUNT(*) FROM market_purchase WHERE user_id = $1)::int AS purchases,
+           (SELECT COALESCE(SUM(price_tanga), 0) FROM market_purchase WHERE user_id = $1)::bigint AS tanga_spent,
+           (SELECT COUNT(*) FROM game_event_participant WHERE user_id = $1)::int AS events,
+           (SELECT COUNT(DISTINCT d) FROM (
+               SELECT started_at::date AS d FROM game_free_run WHERE user_id = $1
+               UNION SELECT started_at::date FROM game_step_activity WHERE user_id = $1
+               UNION SELECT captured_at::date FROM game_territory WHERE owner_user_id = $1) a)::int AS active_days,
+           (SELECT MAX(t) FROM (
+               SELECT MAX(started_at) AS t FROM game_free_run WHERE user_id = $1
+               UNION ALL SELECT MAX(started_at) FROM game_step_activity WHERE user_id = $1
+               UNION ALL SELECT MAX(captured_at) FROM game_territory WHERE owner_user_id = $1) b) AS last_activity`,
+        [id],
+      ),
+      this.db.query(
+        `SELECT a.achievement_code AS code, a.unlocked_at, b.title, b.type, b.threshold, b.unit,
+                b.description, b.icon_file_id
+           FROM game_user_achievement a
+           LEFT JOIN game_badge b ON b.code = a.achievement_code
+          WHERE a.user_id = $1
+          ORDER BY a.unlocked_at DESC`,
+        [id],
+      ),
+      this.db.query(
+        `SELECT p.id::text, i.code, i.title, i.category, i.duration, i.image_file_id, i.is_premium,
+                p.price_tanga, p.xp_spent, p.purchased_at, p.consumed_at
+           FROM market_purchase p
+           JOIN market_item i ON i.id = p.item_id
+          WHERE p.user_id = $1
+          ORDER BY p.purchased_at DESC
+          LIMIT 200`,
+        [id],
+      ),
+      this.db.query(
+        `SELECT e.id::text, e.title, e.goal_type, e.goal_value, e.starts_at, e.ends_at, e.status, p.joined_at
+           FROM game_event_participant p
+           JOIN game_event e ON e.id = p.event_id
+          WHERE p.user_id = $1
+          ORDER BY p.joined_at DESC`,
+        [id],
+      ),
+      this.db.query(
+        `SELECT to_char(d, 'YYYY-MM-DD') AS day,
+                (SELECT COALESCE(SUM(distance_km), 0) FROM game_free_run r
+                  WHERE r.user_id = $1 AND r.started_at::date = d)::float AS km,
+                (SELECT COALESCE(SUM(steps), 0) FROM game_step_activity s
+                  WHERE s.user_id = $1 AND s.started_at::date = d)::bigint AS steps,
+                (SELECT COUNT(*) FROM game_territory t
+                  WHERE t.owner_user_id = $1 AND t.captured_at::date = d)::int AS territories
+           FROM generate_series(CURRENT_DATE - 29, CURRENT_DATE, interval '1 day') AS d
+          ORDER BY d`,
+        [id],
+      ),
+    ]);
+
+    const cid = u.country_id != null ? Number(u.country_id) : null;
+    const rid = u.region_id != null ? Number(u.region_id) : null;
+    return {
+      user: {
+        id: u.id,
+        username: u.username,
+        email: u.email,
+        phone: u.phone,
+        zonicId: u.zonic_id,
+        level: u.level,
+        gender: u.gender,
+        age: u.age != null ? Number(u.age) : null,
+        heightCm: u.height_cm != null ? Number(u.height_cm) : null,
+        weightKg: u.weight_kg != null ? Number(u.weight_kg) : null,
+        bio: u.bio,
+        instagram: u.instagram_username,
+        stravaUrl: u.strava_url,
+        color: u.color,
+        avatarFileId: u.avatar_file_id,
+        coverFileId: u.cover_file_id,
+        countryName: cid != null ? countryUz(cid, u.country_name) : null,
+        regionName: rid != null ? regionUz(rid, u.region_name) : null,
+        createdAt: iso(u.dateofcreated),
+        lastSeenAt: iso(u.last_seen_at),
+        isAdmin: u.is_admin === true,
+        isBlocked: u.is_blocked === true,
+        blockedAt: iso(u.blocked_at),
+        blockedReason: u.blocked_reason,
+        selectedBadgeCode: u.selected_badge_code,
+        selectedFrameCode: u.selected_frame_code,
+        stepGoal: u.step_goal != null ? Number(u.step_goal) : null,
+        loginMethods: [u.via_google ? 'google' : null, u.via_apple ? 'apple' : null].filter(Boolean),
+      },
+      wallet: {
+        tanga: u.tanga_current === true ? num(u.tanga) : 0,
+        xp: num(u.xp),
+        lastRewardAt: iso(u.last_reward_at),
+      },
+      stats: {
+        runs: num(st.runs),
+        runKm: Math.round(num(st.run_km) * 100) / 100,
+        runSeconds: num(st.run_sec),
+        bestRunKm: Math.round(num(st.best_km) * 100) / 100,
+        steps: num(st.steps),
+        bestStepsDay: num(st.best_steps_day),
+        territories: num(st.territories),
+        areaKm2: Math.round((num(st.area_m2) / 1_000_000) * 10000) / 10000,
+        badges: num(st.badges),
+        badgesTotal: num(st.badges_total),
+        purchases: num(st.purchases),
+        tangaSpent: num(st.tanga_spent),
+        events: num(st.events),
+        activeDays: num(st.active_days),
+        lastActivityAt: iso(st.last_activity),
+      },
+      badges: badges.map((b: Record<string, unknown>) => ({
+        code: b.code,
+        title: b.title ?? b.code,
+        type: b.type ?? null,
+        threshold: b.threshold != null ? Number(b.threshold) : null,
+        unit: b.unit ?? null,
+        description: b.description ?? null,
+        iconFileId: b.icon_file_id ?? null,
+        unlockedAt: iso(b.unlocked_at),
+      })),
+      purchases: purchases.map((p: Record<string, unknown>) => ({
+        id: p.id,
+        code: p.code,
+        title: p.title,
+        category: p.category,
+        duration: p.duration,
+        imageFileId: p.image_file_id ?? null,
+        isPremium: p.is_premium === true,
+        priceTanga: num(p.price_tanga),
+        xpSpent: num(p.xp_spent),
+        purchasedAt: iso(p.purchased_at),
+        consumedAt: iso(p.consumed_at),
+      })),
+      events: events.map((e: Record<string, unknown>) => ({
+        id: e.id,
+        title: e.title,
+        goalType: e.goal_type,
+        goalValue: e.goal_value != null ? Number(e.goal_value) : null,
+        startsAt: iso(e.starts_at),
+        endsAt: iso(e.ends_at),
+        status: e.status,
+        joinedAt: iso(e.joined_at),
+      })),
+      trend: trend.map((t: Record<string, unknown>) => ({
+        day: t.day,
+        km: Math.round(num(t.km) * 100) / 100,
+        steps: num(t.steps),
+        territories: num(t.territories),
+      })),
+    };
+  }
+
   // ─── Events ──────────────────────────────────────────────────────────────
   async listAdminEvents() {
     const rows = await this.db.query(

@@ -63,6 +63,12 @@
     return base + "/UserProfile/DownloadAvatar?fileId=" + encodeURIComponent(fileId);
   }
 
+  function userCoverUrl(fileId) {
+    if (!fileId) return "";
+    var base = String((window.ZON_CONFIG && ZON_CONFIG.API_BASE_URL) || "").replace(/\/$/, "");
+    return base + "/UserProfile/DownloadCover?fileId=" + encodeURIComponent(fileId);
+  }
+
   var _avatarBlobCache = Object.create(null);
 
   function userAvatarHtml(fileId, name, sizePx, opts) {
@@ -114,28 +120,36 @@
     );
   }
 
-  function loadAvatarBlob(fileId) {
-    if (!fileId) return Promise.resolve("");
-    if (_avatarBlobCache[fileId]) return Promise.resolve(_avatarBlobCache[fileId]);
+  function loadAuthBlob(src) {
+    if (!src) return Promise.resolve("");
+    if (_avatarBlobCache[src]) return Promise.resolve(_avatarBlobCache[src]);
     var token = "";
     try {
       token = localStorage.getItem((window.ZON_CONFIG && ZON_CONFIG.TOKEN_KEY) || "zon_admin_token") || "";
     } catch (_) {}
-    return fetch(userAvatarUrl(fileId), {
+    return fetch(src, {
       headers: token ? { Authorization: "Bearer " + token } : {},
     })
       .then(function (res) {
-        if (!res.ok) throw new Error("avatar " + res.status);
+        if (!res.ok) throw new Error("image " + res.status);
         return res.blob();
       })
       .then(function (blob) {
         var url = URL.createObjectURL(blob);
-        _avatarBlobCache[fileId] = url;
+        _avatarBlobCache[src] = url;
         return url;
       })
       .catch(function () {
         return "";
       });
+  }
+
+  function loadAvatarBlob(fileId) {
+    return loadAuthBlob(userAvatarUrl(fileId));
+  }
+
+  function loadCoverBlob(fileId) {
+    return loadAuthBlob(userCoverUrl(fileId));
   }
 
   function ensureAvatarModal() {
@@ -364,5 +378,6 @@
     setSelectValue: setSelectValue,
     enhanceSelectsIn: enhanceSelectsIn,
     openAvatarModal: openAvatarModal,
+    loadCoverBlob: loadCoverBlob,
   };
 })(window);

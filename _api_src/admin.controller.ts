@@ -124,6 +124,14 @@ export class AdminController {
     return this.admin.listUsers(q.q, q.status ?? 'all', q.page ?? 1, q.pageSize ?? 20);
   }
 
+  @Get('Users/:id/Profile')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Full user profile: identity, wallet, stats, badges, purchases, events, 30-day trend' })
+  userProfile(@Param('id') id: string) {
+    return this.admin.userProfile(id);
+  }
+
   @Post('Users/:id/Block')
   @HttpCode(200)
   @UseGuards(AdminAuthGuard)

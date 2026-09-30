@@ -162,7 +162,7 @@
         "&name=" +
         encodeURIComponent(u.username || "") +
         (u.avatarFileId ? "&avatar=" + encodeURIComponent(u.avatarFileId) : "") +
-        '">Faoliyatni ochish</a>' +
+        '">Profilni ochish</a>' +
         '<a class="btn btn-sm btn-label-primary" href="app-zon-map.html">Xaritaga o‘tish</a>' +
         "</div></div>"
       );
@@ -206,7 +206,7 @@
             "&name=" +
             encodeURIComponent(u.username || "") +
             (u.avatarFileId ? "&avatar=" + encodeURIComponent(u.avatarFileId) : "") +
-            '">Faoliyat</a>';
+            '">Profil</a>';
           var isOpen = openId === u.id;
           var chevron = isOpen ? "bx-chevron-up" : "bx-chevron-down";
           var main =
