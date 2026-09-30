@@ -1,5 +1,5 @@
 /**
- * Menyu: ishlaydigan qism yuqorida, qolgani Zahira.
+ * Menyu: faqat Zon bo'limlari; shablon (Zahira) elementlari CSS bilan yashiriladi.
  * Navbar: real admin ism + avatar (Telegram/IG uslubida almashtirish).
  * Sessiya yo'q bo'lsa login sahifasiga qaytaradi.
  */
@@ -49,7 +49,7 @@
       el.classList.add("zon-zahira-item");
     });
 
-    var html = '<li class="menu-header small"><span class="menu-header-text">Ishlaydi</span></li>';
+    var html = '<li class="menu-header small"><span class="menu-header-text">Zon Admin</span></li>';
     WORK.forEach(function (item) {
       var active =
         file === item.href ||
@@ -70,14 +70,7 @@
         item.label +
         "</div></a></li>";
     });
-    html +=
-      '<li class="menu-header small zon-zahira-head"><span class="menu-header-text">Zahira katalog</span></li>';
     menu.insertAdjacentHTML("afterbegin", html);
-
-    Array.prototype.forEach.call(menu.querySelectorAll(":scope > .zon-zahira-item > a.menu-link"), function (a) {
-      if (a.querySelector(".zon-zahira-badge")) return;
-      a.insertAdjacentHTML("beforeend", '<span class="zon-zahira-badge">Zahira</span>');
-    });
   }
 
   function bindLogout(root) {

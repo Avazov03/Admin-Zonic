@@ -12,27 +12,9 @@ div[class*="buy-now"] {
   letter-spacing: 0.02em;
 }
 
-/* Zahira katalog — xira, qizil konturli belgi. Butun menyu qizil emas. */
-.menu-inner > .zon-zahira-item > .menu-link,
-.menu-inner > .zon-zahira-item > .menu-header-text,
-.menu-inner > .zon-zahira-item .menu-header-text {
-  opacity: 0.55;
-}
-.menu-inner > .zon-zahira-head .menu-header-text {
-  color: #ff3e1d;
-  opacity: 1;
-}
-.zon-zahira-badge {
-  margin-left: auto;
-  font-size: 0.625rem;
-  line-height: 1.2;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: #ff3e1d;
-  border: 1px solid #ff3e1d;
-  border-radius: 10rem;
-  padding: 0.1rem 0.45rem;
-  background: transparent;
+/* Zahira katalog (shablon sahifalar) menyuda ko'rsatilmaydi; sahifalar URL orqali ochiladi. */
+.menu-inner > .zon-zahira-item {
+  display: none !important;
 }
 .menu-inner > .zon-work-item > .menu-link {
   font-weight: 600;
