@@ -21,6 +21,12 @@
     return;
   }
 
+  // main.js demo qidiruvni faqat #autocomplete bo'lsa ishga tushiradi (JSON yuklangandan keyin).
+  if (!isAuth) {
+    var templateSearch = document.getElementById("autocomplete");
+    if (templateSearch) templateSearch.removeAttribute("id");
+  }
+
   var WORK = [
     { href: "index.html", icon: "bx-home-smile", label: "Boshqaruv" },
     { href: "app-user-list.html", icon: "bx-user", label: "Foydalanuvchilar" },
@@ -708,6 +714,496 @@
       });
   }
 
+  // ─── Global qidiruv (Ctrl+K) ─────────────────────────────────────────────
+  var CMDK_PAGES = WORK.concat([
+    { href: "app-zon-market.html#sotuvlar", icon: "bx-line-chart", label: "Market statistikasi", kw: "sotuv savdo xarid" },
+    { href: "app-zon-push.html", icon: "bx-send", label: "Push yuborish", kw: "xabar bildirishnoma notification" },
+    { href: "app-zon-events.html?open=new", icon: "bx-plus-circle", label: "Yangi musobaqa", kw: "event yaratish qo'shish" },
+    { href: "app-zon-news.html?open=new", icon: "bx-plus-circle", label: "Yangi yangilik", kw: "news yaratish qo'shish" },
+    { href: "app-zon-badges.html?open=new", icon: "bx-plus-circle", label: "Yangi yutuq", kw: "badge yaratish qo'shish" },
+    { href: "app-zon-market.html?open=new#mahsulotlar", icon: "bx-plus-circle", label: "Yangi mahsulot", kw: "market yaratish qo'shish" },
+  ]);
+  var CMDK_KW = {
+    "index.html": "dashboard bosh sahifa statistika",
+    "app-user-list.html": "user userlar ro'yxat blok",
+    "app-zon-leaderboard.html": "leaderboard top eng yaxshi",
+    "app-zon-regions.html": "region hudud viloyat shahar",
+    "app-zon-map.html": "hudud territoriya map",
+    "app-zon-badges.html": "badge achievement",
+    "app-zon-events.html": "event musobaqa chaqiriq",
+    "app-zon-market.html": "do'kon shop mahsulot ramka",
+    "app-zon-news.html": "news e'lon banner",
+    "app-zon-push.html": "notification xabar bildirishnoma",
+  };
+  var BADGE_TYPES = { distance: "yugurish masofa", territory: "hudud maydon" };
+  var CMDK_RECENT_KEY = "zon.cmdk.recent";
+  var CMDK_LIMIT = 5;
+  var NEWS_TYPES = { news: "Yangilik", announcement: "E’lon", banner: "Banner" };
+
+  function cmdkNorm(s) {
+    return String(s == null ? "" : s)
+      .toLowerCase()
+      .replace(/[‘’ʻʼ`´]/g, "'")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  /** -1 = mos emas; aks holda katta = yaxshiroq (birinchi maydon boshidan mos kelsa eng yuqori). */
+  function cmdkScore(tokens, fields) {
+    var joined = cmdkNorm(fields.join(" "));
+    for (var i = 0; i < tokens.length; i++) if (joined.indexOf(tokens[i]) < 0) return -1;
+    var first = cmdkNorm(fields[0]);
+    var q = tokens.join(" ");
+    if (first === q) return 100;
+    if (first.indexOf(q) === 0) return 80;
+    if (first.indexOf(" " + q) >= 0) return 60;
+    if (first.indexOf(q) >= 0) return 40;
+    return 20;
+  }
+
+  function cmdkHighlight(text, tokens) {
+    var raw = String(text == null ? "" : text);
+    var low = raw.toLowerCase().replace(/[‘’ʻʼ`´]/g, "'");
+    if (!tokens.length || low.length !== raw.length) return esc(raw);
+    var marks = [];
+    tokens.forEach(function (t) {
+      var p = low.indexOf(t);
+      if (p >= 0) marks.push([p, p + t.length]);
+    });
+    if (!marks.length) return esc(raw);
+    marks.sort(function (a, b) {
+      return a[0] - b[0];
+    });
+    var out = "";
+    var pos = 0;
+    marks.forEach(function (m) {
+      if (m[0] < pos) return;
+      out += esc(raw.slice(pos, m[0])) + "<mark>" + esc(raw.slice(m[0], m[1])) + "</mark>";
+      pos = m[1];
+    });
+    return out + esc(raw.slice(pos));
+  }
+
+  function cmdkShortDate(iso) {
+    var t = Date.parse(iso);
+    if (!Number.isFinite(t)) return "";
+    var d = new Date(t);
+    return ("0" + d.getDate()).slice(-2) + "." + ("0" + (d.getMonth() + 1)).slice(-2) + "." + d.getFullYear();
+  }
+
+  function eventState(ev) {
+    var now = Date.now();
+    var start = Date.parse(ev.startsAt);
+    var end = Date.parse(ev.endsAt);
+    if (ev.status === "draft") return { label: "Qoralama", tone: "secondary" };
+    if (ev.status === "ended" || end < now) return { label: "Tugagan", tone: "secondary" };
+    if (start > now) return { label: "Tez orada", tone: "info" };
+    return { label: "Aktiv", tone: "success" };
+  }
+
+  function setupSearch() {
+    var wrap = document.querySelector(".navbar-search-wrapper");
+    if (!wrap || wrap.getAttribute("data-zon-cmdk") === "1" || !window.ZonApi) return;
+    wrap.setAttribute("data-zon-cmdk", "1");
+    var mac = /Mac|iPod|iPhone|iPad/.test(navigator.userAgent);
+    wrap.innerHTML =
+      '<button type="button" class="zon-cmdk-trigger" id="zon-cmdk-open" aria-label="Qidirish">' +
+      '<i class="icon-base bx bx-search icon-md"></i><span class="d-none d-md-inline">Qidirish…</span>' +
+      '<kbd class="d-none d-md-inline">' + (mac ? "⌘" : "Ctrl") + " K</kbd></button>";
+
+    var box = document.createElement("div");
+    box.className = "zon-cmdk";
+    box.id = "zon-cmdk";
+    box.hidden = true;
+    box.innerHTML =
+      '<div class="zon-cmdk-backdrop" data-cmdk-close></div>' +
+      '<div class="zon-cmdk-panel" role="dialog" aria-modal="true" aria-label="Global qidiruv">' +
+      '<div class="zon-cmdk-head"><i class="bx bx-search"></i>' +
+      '<input type="text" id="zon-cmdk-q" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="true" aria-controls="zon-cmdk-list" ' +
+      'placeholder="Foydalanuvchi, ZONIC-ID, telefon, musobaqa, yangilik, yutuq, mahsulot…" />' +
+      '<span class="spinner-border spinner-border-sm text-primary" id="zon-cmdk-spin" hidden></span>' +
+      '<kbd role="button" data-cmdk-close>Esc</kbd></div>' +
+      '<div class="zon-cmdk-body" id="zon-cmdk-list" role="listbox"></div>' +
+      '<div class="zon-cmdk-foot"><span><kbd>↑</kbd><kbd>↓</kbd> tanlash</span><span><kbd>Enter</kbd> ochish</span>' +
+      "<span><kbd>" + (mac ? "⌘" : "Ctrl") + "</kbd>+<kbd>Enter</kbd> yangi oynada</span><span><kbd>Esc</kbd> yopish</span></div></div>";
+    document.body.appendChild(box);
+
+    var input = box.querySelector("#zon-cmdk-q");
+    var list = box.querySelector("#zon-cmdk-list");
+    var spin = box.querySelector("#zon-cmdk-spin");
+    var isOpen = false;
+    var cache = null;
+    var lists = { events: [], news: [], badges: [], market: [] };
+    var users = { q: "", items: [], loading: false };
+    var userReq = 0;
+    var userTimer = 0;
+    var flat = [];
+    var active = 0;
+
+    function loadLists() {
+      if (cache) return cache;
+      var get = function (path) {
+        return ZonApi.get(path).then(
+          function (d) {
+            return (d && d.items) || [];
+          },
+          function () {
+            return [];
+          }
+        );
+      };
+      cache = Promise.all([get("/Admin/Events"), get("/Admin/News"), get("/Admin/Badges"), get("/Admin/Market/Items")]).then(function (r) {
+        lists = { events: r[0], news: r[1], badges: r[2], market: r[3] };
+        if (isOpen) render();
+      });
+      return cache;
+    }
+
+    function readRecent() {
+      try {
+        var arr = JSON.parse(localStorage.getItem(CMDK_RECENT_KEY) || "[]");
+        return Array.isArray(arr) ? arr : [];
+      } catch (_) {
+        return [];
+      }
+    }
+    function pushRecent(it) {
+      if (!it || !it.href) return;
+      var arr = readRecent().filter(function (x) {
+        return x.href !== it.href;
+      });
+      arr.unshift({ href: it.href, title: it.title, sub: it.sub || "", icon: it.icon || "bx-link", tone: it.tone || "primary" });
+      try {
+        localStorage.setItem(CMDK_RECENT_KEY, JSON.stringify(arr.slice(0, 6)));
+      } catch (_) {}
+    }
+
+    function iconHtml(it) {
+      if (it.avatar) return it.avatar;
+      return '<span class="avatar-initial rounded bg-label-' + (it.tone || "primary") + '"><i class="bx ' + (it.icon || "bx-link") + '"></i></span>';
+    }
+
+    function pick(source, tokens, fieldsOf, toItem) {
+      return source
+        .map(function (x) {
+          return { x: x, s: cmdkScore(tokens, fieldsOf(x)) };
+        })
+        .filter(function (r) {
+          return r.s >= 0;
+        })
+        .sort(function (a, b) {
+          return b.s - a.s;
+        })
+        .slice(0, CMDK_LIMIT)
+        .map(function (r) {
+          return toItem(r.x);
+        });
+    }
+
+    function buildGroups(q) {
+      var tokens = cmdkNorm(q).split(" ").filter(Boolean);
+      var groups = [];
+      if (!tokens.length) {
+        var recent = readRecent();
+        if (recent.length) groups.push({ title: "So‘nggi ochilganlar", items: recent });
+        groups.push({
+          title: "Sahifalar",
+          items: CMDK_PAGES.map(function (p) {
+            return { href: p.href, title: p.label, icon: p.icon, tone: p.icon === "bx-plus-circle" ? "success" : "primary" };
+          }),
+        });
+        return { groups: groups, tokens: tokens };
+      }
+      var pages = pick(CMDK_PAGES, tokens, function (p) {
+        return [p.label, p.kw || CMDK_KW[p.href] || ""];
+      }, function (p) {
+        return { href: p.href, title: p.label, icon: p.icon, tone: p.icon === "bx-plus-circle" ? "success" : "primary" };
+      });
+      if (pages.length) groups.push({ title: "Sahifalar", items: pages });
+
+      if (users.loading && users.q === q) {
+        groups.push({ title: "Foydalanuvchilar", loading: true, items: [] });
+      } else if (users.q === q && users.items.length) {
+        groups.push({
+          title: "Foydalanuvchilar",
+          items: users.items.map(function (u) {
+            var name = u.username || "—";
+            var sub = ["ZONIC-ID " + (u.zonicId == null ? "—" : u.zonicId)];
+            if (u.phone) sub.push(u.phone);
+            else if (u.email) sub.push(u.email);
+            return {
+              href: "app-zon-user-runs.html?id=" + encodeURIComponent(u.id) + "&name=" + encodeURIComponent(name),
+              title: name,
+              sub: sub.join(" · "),
+              icon: "bx-user",
+              avatar:
+                window.ZonUI && ZonUI.userAvatarHtml
+                  ? ZonUI.userAvatarHtml(u.avatarFileId, name, 32, { zoom: false })
+                  : '<span class="avatar-initial rounded-circle bg-label-primary">' + esc(name.charAt(0).toUpperCase()) + "</span>",
+              badge: u.isBlocked ? { label: "Bloklangan", tone: "danger" } : u.isAdmin ? { label: "Admin", tone: "primary" } : null,
+            };
+          }),
+        });
+      }
+
+      var ev = pick(lists.events, tokens, function (e) {
+        return [e.title, e.description || ""];
+      }, function (e) {
+        var st = eventState(e);
+        return {
+          href: "app-zon-events.html?open=" + encodeURIComponent(e.id),
+          title: e.title,
+          sub: cmdkShortDate(e.startsAt) + " – " + cmdkShortDate(e.endsAt) + " · " + (e.participantCount || 0) + " ishtirokchi",
+          icon: "bx-calendar-event",
+          tone: "success",
+          badge: st,
+        };
+      });
+      if (ev.length) groups.push({ title: "Musobaqalar", items: ev });
+
+      var nw = pick(lists.news, tokens, function (n) {
+        return [n.title, n.body || ""];
+      }, function (n) {
+        return {
+          href: "app-zon-news.html?open=" + encodeURIComponent(n.id),
+          title: n.title,
+          sub: (NEWS_TYPES[n.type] || "Yangilik") + " · " + cmdkShortDate(n.publishedAt || n.createdAt),
+          icon: "bx-news",
+          tone: "info",
+          badge: n.isPublished ? null : { label: "Qoralama", tone: "secondary" },
+        };
+      });
+      if (nw.length) groups.push({ title: "Yangiliklar", items: nw });
+
+      var bd = pick(lists.badges, tokens, function (b) {
+        return [b.title, b.code, b.description || "", BADGE_TYPES[b.type] || b.type || ""];
+      }, function (b) {
+        return {
+          href: "app-zon-badges.html?open=" + encodeURIComponent(b.code),
+          title: b.title,
+          sub: b.code + " · " + (b.threshold || 0) + " " + (b.unit || "") + " · " + (b.unlockCount || 0) + " kishi ochgan",
+          icon: "bx-trophy",
+          tone: "warning",
+          badge: b.isActive === false ? { label: "Nofaol", tone: "secondary" } : null,
+        };
+      });
+      if (bd.length) groups.push({ title: "Yutuqlar", items: bd });
+
+      var mk = pick(lists.market, tokens, function (m) {
+        return [m.name, m.code, m.category || ""];
+      }, function (m) {
+        return {
+          href: "app-zon-market.html?open=" + encodeURIComponent(m.code) + "#mahsulotlar",
+          title: m.name,
+          sub: (m.price || 0) + " tanga" + (m.category ? " · " + m.category : ""),
+          icon: "bx-store",
+          tone: "danger",
+          badge: m.isActive === false ? { label: "Nofaol", tone: "secondary" } : m.isPremium ? { label: "Premium", tone: "warning" } : null,
+        };
+      });
+      if (mk.length) groups.push({ title: "Market", items: mk });
+      return { groups: groups, tokens: tokens };
+    }
+
+    function render() {
+      var q = input.value;
+      var built = buildGroups(q);
+      flat = [];
+      var html = built.groups
+        .map(function (g) {
+          var rows = g.loading
+            ? '<div class="zon-cmdk-loading">Qidirilmoqda…</div>'
+            : g.items
+                .map(function (it) {
+                  var i = flat.length;
+                  flat.push(it);
+                  return (
+                    '<a class="zon-cmdk-item" role="option" id="zon-cmdk-i' + i + '" data-i="' + i + '" href="' + esc(it.href) + '">' +
+                    '<span class="avatar avatar-sm flex-shrink-0">' + iconHtml(it) + "</span>" +
+                    '<span class="zon-cmdk-text"><span class="zon-cmdk-title">' + cmdkHighlight(it.title, built.tokens) + "</span>" +
+                    (it.sub ? "<small>" + cmdkHighlight(it.sub, built.tokens) + "</small>" : "") + "</span>" +
+                    (it.badge ? '<span class="badge bg-label-' + it.badge.tone + '">' + esc(it.badge.label) + "</span>" : "") +
+                    '<i class="bx bx-subdirectory-left zon-cmdk-enter"></i></a>'
+                  );
+                })
+                .join("");
+          return '<div class="zon-cmdk-group">' + esc(g.title) + "</div>" + rows;
+        })
+        .join("");
+      if (!flat.length && !users.loading) {
+        html +=
+          '<div class="zon-cmdk-empty"><i class="bx bx-search-alt"></i><div>“' + esc(q) + "” bo‘yicha hech narsa topilmadi</div>" +
+          "<small>Ism, ZONIC-ID, telefon yoki sarlavhaning bir qismini yozing</small></div>";
+      }
+      list.innerHTML = html;
+      if (window.ZonUI && ZonUI.hydrateAvatars) ZonUI.hydrateAvatars(list);
+      if (active >= flat.length) active = Math.max(0, flat.length - 1);
+      paintActive(false);
+    }
+
+    function paintActive(scroll) {
+      Array.prototype.forEach.call(list.querySelectorAll(".zon-cmdk-item"), function (el) {
+        var on = Number(el.getAttribute("data-i")) === active;
+        el.classList.toggle("is-active", on);
+        el.setAttribute("aria-selected", on ? "true" : "false");
+        if (on && scroll) el.scrollIntoView({ block: "nearest" });
+      });
+      input.setAttribute("aria-activedescendant", flat.length ? "zon-cmdk-i" + active : "");
+    }
+
+    function searchUsers(q) {
+      clearTimeout(userTimer);
+      var clean = q.trim();
+      if (clean.length < 2) {
+        users = { q: q, items: [], loading: false };
+        spin.hidden = true;
+        return;
+      }
+      users = { q: q, items: [], loading: true };
+      spin.hidden = false;
+      var token = ++userReq;
+      userTimer = setTimeout(function () {
+        ZonApi.get("/Admin/Users?q=" + encodeURIComponent(clean) + "&page=1&pageSize=" + CMDK_LIMIT)
+          .then(
+            function (d) {
+              return (d && d.items) || [];
+            },
+            function () {
+              return [];
+            }
+          )
+          .then(function (items) {
+            if (token !== userReq) return;
+            users = { q: q, items: items, loading: false };
+            spin.hidden = true;
+            if (isOpen) render();
+          });
+      }, 220);
+    }
+
+    function go(it, newTab) {
+      if (!it) return;
+      pushRecent(it);
+      if (newTab) {
+        window.open(it.href, "_blank");
+        return;
+      }
+      close();
+      location.href = it.href;
+    }
+
+    function open() {
+      if (isOpen) return;
+      isOpen = true;
+      box.hidden = false;
+      document.body.classList.add("zon-cmdk-lock");
+      input.value = "";
+      users = { q: "", items: [], loading: false };
+      active = 0;
+      render();
+      loadLists();
+      setTimeout(function () {
+        input.focus();
+      }, 0);
+    }
+
+    function close() {
+      if (!isOpen) return;
+      isOpen = false;
+      box.hidden = true;
+      spin.hidden = true;
+      document.body.classList.remove("zon-cmdk-lock");
+    }
+
+    document.getElementById("zon-cmdk-open").addEventListener("click", open);
+    box.addEventListener("click", function (e) {
+      if (e.target.closest("[data-cmdk-close]")) close();
+    });
+    input.addEventListener("input", function () {
+      active = 0;
+      searchUsers(input.value);
+      render();
+    });
+    input.addEventListener("keydown", function (e) {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        if (!flat.length) return;
+        active = (active + (e.key === "ArrowDown" ? 1 : -1) + flat.length) % flat.length;
+        paintActive(true);
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        go(flat[active], e.ctrlKey || e.metaKey);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        close();
+      }
+    });
+    list.addEventListener("mousemove", function (e) {
+      var el = e.target.closest(".zon-cmdk-item");
+      if (!el) return;
+      var i = Number(el.getAttribute("data-i"));
+      if (i !== active) {
+        active = i;
+        paintActive(false);
+      }
+    });
+    list.addEventListener("click", function (e) {
+      var el = e.target.closest(".zon-cmdk-item");
+      if (!el || e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) {
+        if (el) pushRecent(flat[Number(el.getAttribute("data-i"))]);
+        return;
+      }
+      e.preventDefault();
+      go(flat[Number(el.getAttribute("data-i"))], false);
+    });
+
+    // Capture fazasi: main.js dagi document Ctrl+K handler (demo qidiruv) ishlamasin.
+    window.addEventListener(
+      "keydown",
+      function (e) {
+        var k = String(e.key || "").toLowerCase();
+        if ((e.ctrlKey || e.metaKey) && k === "k") {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          if (isOpen) close();
+          else open();
+          return;
+        }
+        if (k === "/" && !isOpen && !e.ctrlKey && !e.metaKey && !e.altKey) {
+          var t = e.target;
+          var typing = t && (t.isContentEditable || /^(input|textarea|select)$/i.test(t.tagName));
+          if (!typing && !document.querySelector(".modal.show")) {
+            e.preventDefault();
+            open();
+          }
+        }
+      },
+      true
+    );
+  }
+
+  /** ?open=<id> — qidiruvdan kelganda yozuv modalini ochadi (open=new → "Yangi"). */
+  function openFromUrl() {
+    var qs = new URLSearchParams(location.search);
+    var id = qs.get("open");
+    if (!id) return;
+    qs.delete("open");
+    var rest = qs.toString();
+    history.replaceState(null, "", location.pathname + (rest ? "?" + rest : "") + location.hash);
+    var attr = file === "app-zon-events.html" ? "data-parts" : "data-edit";
+    var safe = window.CSS && CSS.escape ? CSS.escape(id) : id.replace(/["\\]/g, "\\$&");
+    var sel = id === "new" ? "#z-new" : "[" + attr + '="' + safe + '"]';
+    var started = Date.now();
+    (function tick() {
+      var el = document.querySelector(sel);
+      if (el) {
+        el.click();
+        return;
+      }
+      if (Date.now() - started < 10000) setTimeout(tick, 150);
+    })();
+  }
+
   function boot() {
     splitMenu();
     cleanTemplateChrome();
@@ -715,6 +1211,8 @@
     if (!isAuth) {
       setupLanguage();
       setupShortcuts();
+      setupSearch();
+      openFromUrl();
       setupNavbarUser();
       // notifications setupNavbarUser ichida adminMe dan keyin
     } else {
