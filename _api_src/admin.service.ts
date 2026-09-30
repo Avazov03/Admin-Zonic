@@ -532,6 +532,102 @@ export class AdminService {
     return { ok: true };
   }
 
+  /** Admin ranking across all users; metric/period are whitelisted before touching SQL. */
+  async leaderboard(metric: string, period: string, regionId: number | undefined, limit: number) {
+    const METRICS: Record<string, string> = {
+      km: 'COALESCE(r.km, 0)',
+      runs: 'COALESCE(r.runs, 0)',
+      steps: 'COALESCE(s.steps, 0)',
+      area: 'COALESCE(t.area, 0)',
+      territories: 'COALESCE(t.terr, 0)',
+      xp: 'COALESCE(w.xp, 0)',
+    };
+    const m = METRICS[metric] ? metric : 'km';
+    const p = m === 'xp' ? 'all' : ['7d', 'week', 'month', 'all'].includes(period) ? period : 'week';
+    const SINCE: Record<string, string> = {
+      '7d': `(CURRENT_DATE - 6)::timestamp`,
+      week: `date_trunc('week', CURRENT_DATE)`,
+      month: `date_trunc('month', CURRENT_DATE)`,
+      all: `'-infinity'::timestamp`,
+    };
+    const since = SINCE[p];
+    const lim = Math.min(Math.max(Math.floor(limit) || 50, 1), 200);
+    const params: unknown[] = [];
+    let regionSql = '';
+    if (regionId != null && Number.isFinite(regionId)) {
+      params.push(regionId);
+      regionSql = `AND u.region_id = $${params.length}`;
+    }
+    const expr = METRICS[m];
+
+    const rows = await this.db.query(
+      `WITH r AS (SELECT user_id, SUM(distance_km) AS km, COUNT(*) AS runs
+                    FROM game_free_run WHERE started_at >= ${since} GROUP BY user_id),
+            s AS (SELECT user_id, SUM(steps) AS steps
+                    FROM game_step_activity WHERE started_at >= ${since} GROUP BY user_id),
+            t AS (SELECT owner_user_id AS user_id, COUNT(*) AS terr, SUM(area_m2) AS area
+                    FROM game_territory WHERE captured_at >= ${since} GROUP BY owner_user_id)
+       SELECT u.id::text, u.username, u.zonic_id, u.avatar_file_id, u.level, u.is_blocked,
+              u.region_id, reg.shortname AS region_name,
+              COALESCE(r.km, 0)::float AS km, COALESCE(r.runs, 0)::int AS runs,
+              COALESCE(s.steps, 0)::bigint AS steps,
+              COALESCE(t.terr, 0)::int AS terr, COALESCE(t.area, 0)::float AS area,
+              COALESCE(w.xp, 0)::bigint AS xp,
+              COUNT(*) OVER ()::int AS participants
+         FROM sys_user u
+         LEFT JOIN r ON r.user_id = u.id
+         LEFT JOIN s ON s.user_id = u.id
+         LEFT JOIN t ON t.user_id = u.id
+         LEFT JOIN game_user_wallet w ON w.user_id = u.id
+         LEFT JOIN info_region reg ON reg.id = u.region_id
+        WHERE u.is_admin = false AND ${expr} > 0 ${regionSql}
+        ORDER BY ${expr} DESC, u.username ASC
+        LIMIT ${lim}`,
+      params,
+    );
+    const [range] = await this.db.query(
+      `SELECT to_char(${p === 'all' ? 'NULL::date' : since}, 'YYYY-MM-DD') AS since, to_char(CURRENT_DATE, 'YYYY-MM-DD') AS today`,
+    );
+
+    return {
+      metric: m,
+      period: p,
+      since: range?.since ?? null,
+      today: range?.today ?? null,
+      participants: rows.length ? Number(rows[0].participants) : 0,
+      items: rows.map((r: Record<string, unknown>, i: number) => {
+        const rid = r.region_id != null ? Number(r.region_id) : null;
+        const km = Math.round(Number(r.km) * 100) / 100;
+        const areaKm2 = Math.round((Number(r.area) / 1_000_000) * 10000) / 10000;
+        const values: Record<string, number> = {
+          km,
+          runs: Number(r.runs),
+          steps: Number(r.steps),
+          area: areaKm2,
+          territories: Number(r.terr),
+          xp: Number(r.xp),
+        };
+        return {
+          rank: i + 1,
+          userId: r.id,
+          username: r.username,
+          zonicId: r.zonic_id,
+          avatarFileId: r.avatar_file_id ?? null,
+          level: r.level ?? null,
+          isBlocked: r.is_blocked === true,
+          regionName: rid != null ? regionUz(rid, r.region_name as string) : null,
+          value: values[m],
+          km,
+          runs: values.runs,
+          steps: values.steps,
+          areaKm2,
+          territories: values.territories,
+          xp: values.xp,
+        };
+      }),
+    };
+  }
+
   /** One-shot admin profile: identity, wallet, lifetime stats, badges, purchases, events, 30-day trend. */
   async userProfile(id: string) {
     await this.requireUser(id);

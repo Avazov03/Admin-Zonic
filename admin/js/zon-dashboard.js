@@ -1218,6 +1218,17 @@
       "</ul></div></div>" +
       '<div class="card-body"><div id="z-heat-grid" class="zon-heat"></div>' +
       '<div class="zon-heat-stats mt-4" id="z-heat-stats"></div></div></div>' +
+      '<div class="card mb-6"><div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-3">' +
+      '<div><h5 class="card-title mb-1">Yetakchilar</h5>' +
+      '<p class="mb-0 text-body-secondary small">So‘nggi 7 kun — Top 5</p></div>' +
+      '<div class="d-flex flex-wrap align-items-center gap-2">' +
+      '<div class="zon-seg" id="z-top-seg">' +
+      '<button type="button" class="active" data-m="km">Masofa</button>' +
+      '<button type="button" data-m="steps">Qadam</button>' +
+      '<button type="button" data-m="area">Hudud</button></div>' +
+      '<a class="btn btn-sm btn-label-primary" id="z-top-all" href="app-zon-leaderboard.html?metric=km&period=7d">To‘liq reyting</a>' +
+      "</div></div>" +
+      '<div class="card-body"><div class="zon-top5" id="z-top"></div></div></div>' +
       '<div class="row g-6 mb-6">' +
       '<div class="col-12 col-xl-8"><div class="card h-100"><div class="card-header"><h5 class="card-title mb-0">So\'nggi 7 kun — o\'sish</h5></div>' +
       '<div class="card-body"><div id="z-chart-trend"></div></div></div></div>' +
@@ -1246,9 +1257,70 @@
 
     setTimeout(function () {
       bindHeatmap(data);
+      bindTop5();
       renderCharts(data);
       bindDaysTable(days30);
     }, 0);
+  }
+
+  var TOP_UNITS = { km: " km", steps: " qadam", area: " km²" };
+  var topReq = 0;
+
+  function bindTop5() {
+    var seg = document.getElementById("z-top-seg");
+    if (!seg) return;
+    seg.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-m]");
+      if (!b) return;
+      Array.prototype.forEach.call(seg.querySelectorAll("[data-m]"), function (x) {
+        x.classList.toggle("active", x === b);
+      });
+      loadTop5(b.getAttribute("data-m"));
+    });
+    loadTop5("km");
+  }
+
+  function loadTop5(metric) {
+    var box = document.getElementById("z-top");
+    var token = ++topReq;
+    document.getElementById("z-top-all").href = "app-zon-leaderboard.html?metric=" + metric + "&period=7d";
+    var sk =
+      '<div class="zon-top5-item"><span class="zon-skel" style="width:52px;height:52px;border-radius:50%"></span>' +
+      '<span class="zon-skel mt-2" style="width:70%;height:12px"></span><span class="zon-skel mt-2" style="width:50%;height:16px"></span></div>';
+    box.innerHTML = sk + sk + sk + sk + sk;
+    ZonApi.get("/Admin/Leaderboard?metric=" + metric + "&period=7d&limit=5")
+      .then(function (d) {
+        if (token !== topReq) return;
+        var items = (d && d.items) || [];
+        if (!items.length) {
+          box.innerHTML =
+            '<div class="zon-daymodal-empty w-100 py-4"><i class="bx bx-medal"></i>So‘nggi 7 kunda natija yo‘q</div>';
+          return;
+        }
+        box.innerHTML = items
+          .map(function (it) {
+            var href =
+              "app-zon-user-runs.html?id=" + encodeURIComponent(it.userId) +
+              "&name=" + encodeURIComponent(it.username || "") +
+              (it.avatarFileId ? "&avatar=" + encodeURIComponent(it.avatarFileId) : "");
+            var avatar = window.ZonUI && ZonUI.userAvatarHtml
+              ? ZonUI.userAvatarHtml(it.avatarFileId, it.username, 52, { zoom: false })
+              : "";
+            return (
+              '<a class="zon-top5-item" href="' + esc(href) + '">' +
+              '<span class="zon-lb-rank' + (it.rank <= 3 ? " is-top is-" + it.rank : "") + '">' + it.rank + "</span>" +
+              avatar +
+              '<span class="zon-top5-name">' + esc(it.username || "—") + "</span>" +
+              '<span class="zon-top5-val">' + n(it.value) + TOP_UNITS[metric] + "</span></a>"
+            );
+          })
+          .join("");
+        if (window.ZonUI && ZonUI.hydrateAvatars) ZonUI.hydrateAvatars(box);
+      })
+      .catch(function (err) {
+        if (token !== topReq) return;
+        box.innerHTML = '<div class="text-body-secondary small">Reyting yuklanmadi: ' + esc((err && err.message) || "xato") + "</div>";
+      });
   }
 
   function showError(root, err) {

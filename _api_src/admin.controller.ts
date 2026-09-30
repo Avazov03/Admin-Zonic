@@ -124,6 +124,20 @@ export class AdminController {
     return this.admin.listUsers(q.q, q.status ?? 'all', q.page ?? 1, q.pageSize ?? 20);
   }
 
+  @Get('Leaderboard')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Ranking: metric=km|runs|steps|area|territories|xp, period=7d|week|month|all, optional regionId' })
+  leaderboard(
+    @Query('metric') metric?: string,
+    @Query('period') period?: string,
+    @Query('regionId') regionId?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const rid = regionId != null && regionId !== '' ? Number(regionId) : undefined;
+    return this.admin.leaderboard(metric ?? 'km', period ?? 'week', rid, Number(limit) || 50);
+  }
+
   @Get('Users/:id/Profile')
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth()

@@ -24,6 +24,7 @@
   var WORK = [
     { href: "index.html", icon: "bx-home-smile", label: "Boshqaruv" },
     { href: "app-user-list.html", icon: "bx-user", label: "Foydalanuvchilar" },
+    { href: "app-zon-leaderboard.html", icon: "bx-medal", label: "Reyting" },
     { href: "app-zon-map.html", icon: "bx-map-alt", label: "Xarita" },
     { href: "app-zon-badges.html", icon: "bx-trophy", label: "Yutuqlar" },
     { href: "app-zon-events.html", icon: "bx-calendar-event", label: "Musobaqalar" },
