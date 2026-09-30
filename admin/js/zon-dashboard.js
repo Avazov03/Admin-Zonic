@@ -77,6 +77,20 @@
     return "Yugurish";
   }
 
+  function isoDate(dt) {
+    return (
+      dt.getFullYear() +
+      "-" +
+      String(dt.getMonth() + 1).padStart(2, "0") +
+      "-" +
+      String(dt.getDate()).padStart(2, "0")
+    );
+  }
+
+  function todayIso() {
+    return isoDate(new Date());
+  }
+
   function heatLevel(v, max) {
     if (!v || v <= 0) return 0;
     if (!max || max <= 0) return 1;
@@ -112,13 +126,7 @@
         bestMonth = mk;
       }
     });
-    var now = new Date();
-    var today =
-      now.getFullYear() +
-      "-" +
-      String(now.getMonth() + 1).padStart(2, "0") +
-      "-" +
-      String(now.getDate()).padStart(2, "0");
+    var today = todayIso();
     // The calendar covers the whole year, so future days must not break streaks.
     var past = days.filter(function (d) {
       return d.day && d.day <= today;
@@ -228,6 +236,7 @@
       "</div>" +
       '<div class="zon-heat-blocks">';
 
+    var today = todayIso();
     blocks.forEach(function (b) {
       html +=
         '<div class="zon-heat-mblock"><div class="zon-heat-month">' +
@@ -245,6 +254,7 @@
           html +=
             '<span class="zon-heat-cell lvl-' +
             lvl +
+            (d.day > today ? " is-future" : "") +
             '" data-day="' +
             d.day +
             '" data-val="' +
@@ -276,6 +286,13 @@
     heatLayout = { cols: cols, blocks: blocks.length };
     fitHeatmap();
     bindHeatTip(host);
+    host.onclick = function (e) {
+      var cell = e.target.closest(".zon-heat-cell[data-day]");
+      if (!cell || cell.classList.contains("is-future")) return;
+      var tip = document.getElementById("z-heat-tip");
+      if (tip) tip.hidden = true;
+      openDayModal(cell.getAttribute("data-day"));
+    };
 
     document.querySelectorAll("[data-heat]").forEach(function (btn) {
       btn.classList.toggle("active", btn.getAttribute("data-heat") === heatMetric);
@@ -307,6 +324,318 @@
     cell = Math.max(8, Math.min(max, cell));
     wrap.style.setProperty("--zh-cell", cell + "px");
     wrap.style.setProperty("--zh-gap", gap + "px");
+  }
+
+  // ─── Day users modal (heatmap cell click) ─────────────────────────────
+  var WEEKDAYS_UZ = ["Yakshanba", "Dushanba", "Seshanba", "Chorshanba", "Payshanba", "Juma", "Shanba"];
+  var MONTHS_UZ_FULL = [
+    "yanvar", "fevral", "mart", "aprel", "may", "iyun",
+    "iyul", "avgust", "sentyabr", "oktyabr", "noyabr", "dekabr",
+  ];
+  var DAY_FILTERS = [
+    { key: "all", label: "Barchasi", test: function () { return true; } },
+    { key: "runs", label: "Yugurgan", test: function (u) { return (u.day || {}).runs > 0; } },
+    { key: "steps", label: "Qadam", test: function (u) { return (u.day || {}).steps > 0; } },
+    { key: "terr", label: "Hudud", test: function (u) { return (u.day || {}).territories > 0; } },
+    { key: "new", label: "Yangi", test: function (u) { return !!u.isNew; } },
+  ];
+  var METRIC_FILTER = { runs: "runs", steps: "steps", newUsers: "new" };
+  var dayModal = { day: null, filter: "all", q: "", users: null, req: 0, cache: Object.create(null) };
+
+  function esc(s) {
+    return window.ZonUI ? ZonUI.esc(s) : String(s == null ? "" : s);
+  }
+
+  function prettyDay(day) {
+    var p = day.split("-");
+    return Number(p[2]) + "-" + MONTHS_UZ_FULL[Number(p[1]) - 1] + ", " + p[0];
+  }
+
+  function shiftDay(day, delta) {
+    var dt = new Date(day + "T12:00:00");
+    dt.setDate(dt.getDate() + delta);
+    return isoDate(dt);
+  }
+
+  function calendarDay(day) {
+    for (var i = 0; i < heatData.length; i++) {
+      if (heatData[i].day === day) return heatData[i];
+    }
+    return null;
+  }
+
+  function ensureDayModal() {
+    if (document.getElementById("zonDayModal")) return;
+    var segs = DAY_FILTERS.map(function (f) {
+      return (
+        '<button type="button" role="tab" data-f="' +
+        f.key +
+        '">' +
+        f.label +
+        ' <span class="zon-seg-count" data-count="' +
+        f.key +
+        '">0</span></button>'
+      );
+    }).join("");
+    var wrap = document.createElement("div");
+    wrap.innerHTML =
+      '<div class="modal fade zon-daymodal" id="zonDayModal" tabindex="-1" aria-labelledby="zonDayModalTitle" aria-hidden="true">' +
+      '<div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg"><div class="modal-content">' +
+      '<div class="modal-header zon-daymodal-head">' +
+      '<div class="d-flex align-items-center gap-2 flex-grow-1 min-w-0">' +
+      '<button type="button" class="btn btn-icon btn-sm btn-label-secondary rounded-pill" data-day-nav="-1" aria-label="Oldingi kun" title="Oldingi kun (←)"><i class="icon-base bx bx-chevron-left"></i></button>' +
+      '<div class="min-w-0 px-1"><h5 class="modal-title mb-0 text-truncate" id="zonDayModalTitle">—</h5>' +
+      '<small class="text-body-secondary" id="zonDayModalSub"></small></div>' +
+      '<button type="button" class="btn btn-icon btn-sm btn-label-secondary rounded-pill" data-day-nav="1" aria-label="Keyingi kun" title="Keyingi kun (→)"><i class="icon-base bx bx-chevron-right"></i></button>' +
+      "</div>" +
+      '<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Yopish"></button></div>' +
+      '<div class="zon-daymodal-tools">' +
+      '<div class="zon-daymodal-summary" id="zonDaySummary"></div>' +
+      '<div class="d-flex flex-wrap gap-2 align-items-center mt-3">' +
+      '<div class="zon-seg" id="zonDayFilter" role="tablist" aria-label="Filtr">' +
+      segs +
+      "</div>" +
+      '<div class="input-group input-group-sm input-group-merge zon-daymodal-search ms-auto">' +
+      '<span class="input-group-text"><i class="icon-base bx bx-search"></i></span>' +
+      '<input type="search" class="form-control" id="zonDaySearch" placeholder="Username yoki ZONIC-ID" autocomplete="off" aria-label="Qidirish" />' +
+      "</div></div></div>" +
+      '<div class="modal-body zon-daymodal-body" id="zonDayBody"></div>' +
+      "</div></div></div>";
+    var el = wrap.firstChild;
+    document.body.appendChild(el);
+
+    el.querySelector("#zonDayFilter").addEventListener("click", function (e) {
+      var btn = e.target.closest("button[data-f]");
+      if (!btn || btn.disabled) return;
+      dayModal.filter = btn.getAttribute("data-f");
+      paintDayList();
+    });
+    el.querySelector("#zonDaySearch").addEventListener("input", function (e) {
+      dayModal.q = e.target.value;
+      paintDayList();
+    });
+    el.addEventListener("click", function (e) {
+      var nav = e.target.closest("[data-day-nav]");
+      if (nav && !nav.disabled) loadDayModal(shiftDay(dayModal.day, Number(nav.getAttribute("data-day-nav"))));
+      var retry = e.target.closest("[data-day-retry]");
+      if (retry) loadDayModal(dayModal.day);
+      if (e.target.closest("[data-day-all]")) {
+        dayModal.filter = "all";
+        paintDayList();
+      }
+    });
+    el.addEventListener("keydown", function (e) {
+      if (e.target && e.target.id === "zonDaySearch") return;
+      var btn = null;
+      if (e.key === "ArrowLeft") btn = el.querySelector('[data-day-nav="-1"]');
+      if (e.key === "ArrowRight") btn = el.querySelector('[data-day-nav="1"]');
+      if (btn && !btn.disabled) {
+        e.preventDefault();
+        btn.click();
+      }
+    });
+  }
+
+  function openDayModal(day) {
+    ensureDayModal();
+    dayModal.filter = METRIC_FILTER[heatMetric] || "all";
+    dayModal.q = "";
+    document.getElementById("zonDaySearch").value = "";
+    loadDayModal(day);
+    if (window.ZonUI) ZonUI.modalShow("zonDayModal");
+  }
+
+  function loadDayModal(day) {
+    dayModal.day = day;
+    dayModal.users = null;
+    var dt = new Date(day + "T12:00:00");
+    document.getElementById("zonDayModalTitle").textContent = prettyDay(day);
+    document.getElementById("zonDayModalSub").textContent = WEEKDAYS_UZ[dt.getDay()];
+    var today = todayIso();
+    var prev = shiftDay(day, -1);
+    var next = shiftDay(day, 1);
+    document.querySelector('#zonDayModal [data-day-nav="-1"]').disabled = !calendarDay(prev);
+    document.querySelector('#zonDayModal [data-day-nav="1"]').disabled = next > today || !calendarDay(next);
+    paintDaySummary(null);
+    paintDayList();
+
+    var req = ++dayModal.req;
+    var cached = dayModal.cache[day];
+    var p = cached ? Promise.resolve(cached) : ZonApi.adminDayActivity(day);
+    p.then(function (payload) {
+      // Today's list is still changing, so only past days are cached.
+      if (day < today) dayModal.cache[day] = payload;
+      if (req !== dayModal.req) return;
+      var users = (payload && payload.users) || [];
+      users.sort(function (a, b) {
+        return String(a.username || "").localeCompare(String(b.username || ""), "uz", {
+          sensitivity: "base",
+          numeric: true,
+        });
+      });
+      dayModal.users = users;
+      paintDaySummary(users);
+      paintDayList();
+    }).catch(function (err) {
+      if (req !== dayModal.req) return;
+      if (window.ZonUI && ZonUI.authFail(err)) return;
+      document.getElementById("zonDayBody").innerHTML =
+        '<div class="zon-daymodal-empty"><i class="icon-base bx bx-error-circle text-danger"></i>' +
+        '<div class="fw-semibold text-heading mb-1">Ma’lumot yuklanmadi</div>' +
+        '<div class="small mb-3">' +
+        esc((window.ZonUI && ZonUI.errMsg(err)) || "Tarmoq xatosi") +
+        "</div>" +
+        '<button type="button" class="btn btn-sm btn-primary" data-day-retry="1"><i class="icon-base bx bx-refresh me-1"></i>Qayta urinish</button></div>';
+    });
+  }
+
+  function paintDaySummary(users) {
+    var host = document.getElementById("zonDaySummary");
+    var c = calendarDay(dayModal.day) || {};
+    function tile(label, value, icon, tone) {
+      return (
+        '<div class="zon-daymodal-tile is-' +
+        tone +
+        '"><i class="icon-base bx ' +
+        icon +
+        '"></i><div><span>' +
+        label +
+        "</span><strong>" +
+        value +
+        "</strong></div></div>"
+      );
+    }
+    host.innerHTML =
+      tile("Faol user", users ? n(users.length) : "…", "bx-group", "primary") +
+      tile("Yugurish", n(c.runs), "bx-run", "success") +
+      tile("Masofa", km(c.distanceKm) + " km", "bx-trip", "warning") +
+      tile("Qadam", n(c.steps), "bx-walk", "info");
+  }
+
+  function dayUserRow(u) {
+    var d = u.day || {};
+    var U = window.ZonUI;
+    var av = U ? U.userAvatarHtml(u.avatarFileId, u.username, 42, { zoom: false }) : "";
+    var sub = ["ZONIC-ID " + (u.zonicId != null ? u.zonicId : "—")];
+    if (u.regionName) sub.push(esc(u.regionName));
+    if (u.level) sub.push(esc(u.level));
+    var chips = "";
+    if (d.runs > 0) {
+      chips +=
+        '<span class="zon-chip is-run" title="Yugurish"><i class="icon-base bx bx-run"></i>' +
+        n(d.runs) +
+        (d.distanceKm ? " · " + km(d.distanceKm) + " km" : "") +
+        "</span>";
+    }
+    if (d.steps > 0) {
+      chips += '<span class="zon-chip is-step" title="Qadam"><i class="icon-base bx bx-walk"></i>' + n(d.steps) + "</span>";
+    }
+    if (d.territories > 0) {
+      chips +=
+        '<span class="zon-chip is-terr" title="Hudud"><i class="icon-base bx bx-map-alt"></i>' + n(d.territories) + "</span>";
+    }
+    if (!chips && u.isNew) {
+      chips = '<span class="zon-chip" title="Faollik yo‘q">Faollik yo‘q</span>';
+    }
+    var href =
+      "app-zon-user-runs.html?id=" +
+      encodeURIComponent(u.id) +
+      "&name=" +
+      encodeURIComponent(u.username || "") +
+      (u.avatarFileId ? "&avatar=" + encodeURIComponent(u.avatarFileId) : "");
+    return (
+      '<a class="zon-dayuser" href="' +
+      href +
+      '">' +
+      av +
+      '<div class="zon-dayuser-main"><div class="zon-dayuser-name">' +
+      esc(u.username || "—") +
+      (u.isNew ? ' <span class="badge rounded-pill bg-label-success zon-dayuser-new">Yangi</span>' : "") +
+      '</div><div class="zon-dayuser-sub">' +
+      sub.join(" · ") +
+      "</div></div>" +
+      '<div class="zon-dayuser-stats">' +
+      chips +
+      "</div>" +
+      '<i class="icon-base bx bx-chevron-right zon-dayuser-go"></i></a>'
+    );
+  }
+
+  function paintDayList() {
+    var body = document.getElementById("zonDayBody");
+    var users = dayModal.users;
+
+    DAY_FILTERS.forEach(function (f) {
+      var cnt = users ? users.filter(f.test).length : 0;
+      var btn = document.querySelector('#zonDayFilter button[data-f="' + f.key + '"]');
+      btn.querySelector(".zon-seg-count").textContent = users ? n(cnt) : "–";
+      btn.disabled = !!users && f.key !== "all" && cnt === 0 && dayModal.filter !== f.key;
+      btn.classList.toggle("active", dayModal.filter === f.key);
+      btn.setAttribute("aria-selected", dayModal.filter === f.key ? "true" : "false");
+    });
+
+    if (!users) {
+      var sk = "";
+      for (var i = 0; i < 5; i++) {
+        sk +=
+          '<div class="zon-dayuser is-skeleton"><span class="zon-skel rounded-circle" style="width:42px;height:42px"></span>' +
+          '<div class="zon-dayuser-main"><span class="zon-skel d-block mb-2" style="width:' +
+          (40 + ((i * 17) % 35)) +
+          '%;height:12px"></span><span class="zon-skel d-block" style="width:30%;height:10px"></span></div></div>';
+      }
+      body.innerHTML = sk;
+      return;
+    }
+
+    var f = DAY_FILTERS.filter(function (x) {
+      return x.key === dayModal.filter;
+    })[0] || DAY_FILTERS[0];
+    var q = dayModal.q.trim().toLowerCase();
+    var list = users.filter(function (u) {
+      if (!f.test(u)) return false;
+      if (!q) return true;
+      return (
+        String(u.username || "").toLowerCase().indexOf(q) !== -1 ||
+        String(u.zonicId || "").indexOf(q) !== -1
+      );
+    });
+
+    if (!list.length) {
+      body.innerHTML = q
+        ? '<div class="zon-daymodal-empty"><i class="icon-base bx bx-search-alt"></i>' +
+          '<div class="fw-semibold text-heading mb-1">Hech kim topilmadi</div>' +
+          '<div class="small">“' +
+          esc(dayModal.q.trim()) +
+          "” bo‘yicha natija yo‘q</div></div>"
+        : !users.length
+          ? '<div class="zon-daymodal-empty"><i class="icon-base bx bx-user-x"></i>' +
+            '<div class="fw-semibold text-heading mb-1">Bu kuni faol user yo‘q</div>' +
+            '<div class="small">Boshqa kunni tanlang</div></div>'
+          : '<div class="zon-daymodal-empty"><i class="icon-base bx bx-filter-alt"></i>' +
+            '<div class="fw-semibold text-heading mb-1">“' +
+            f.label +
+            "” bo‘yicha user yo‘q</div>" +
+            '<div class="small mb-3">Bu kuni ' +
+            n(users.length) +
+            " ta user boshqa faollik qilgan</div>" +
+            '<button type="button" class="btn btn-sm btn-label-primary" data-day-all="1">Barchasini ko‘rish</button></div>';
+      return;
+    }
+
+    var html = '<div class="zon-daylist">';
+    var letter = null;
+    list.forEach(function (u) {
+      var ch = String(u.username || "#").trim().charAt(0).toLocaleUpperCase("uz");
+      if (!/\p{L}/u.test(ch)) ch = "#";
+      if (ch !== letter) {
+        letter = ch;
+        html += '<div class="zon-daylist-letter">' + esc(ch) + "</div>";
+      }
+      html += dayUserRow(u);
+    });
+    html += "</div>";
+    body.innerHTML = html;
+    if (window.ZonUI && ZonUI.hydrateAvatars) ZonUI.hydrateAvatars(body);
   }
 
   var heatResizeTimer = null;
@@ -350,7 +679,10 @@
         " · User: " +
         n(users) +
         (dist ? " · " + km(dist) + " km" : "") +
-        "</div>";
+        "</div>" +
+        (cell.classList.contains("is-future")
+          ? ""
+          : '<div class="zon-heat-tip-hint"><i class="icon-base bx bx-pointer"></i> Bosing — faol userlar</div>');
       tip.hidden = false;
       var pad = 14;
       var x = e.clientX + pad;
@@ -655,8 +987,11 @@
         '<div class="d-flex flex-wrap align-items-start justify-content-between gap-3">' +
         '<div class="d-flex align-items-center gap-3">' +
         av +
-        '<div><a class="fw-semibold" href="app-zon-user-runs.html?userId=' +
+        '<div><a class="fw-semibold" href="app-zon-user-runs.html?id=' +
         encodeURIComponent(u.id) +
+        "&name=" +
+        encodeURIComponent(u.username || "") +
+        (u.avatarFileId ? "&avatar=" + encodeURIComponent(u.avatarFileId) : "") +
         '">' +
         (U ? U.esc(u.username) : u.username) +
         '</a><div class="small text-body-secondary">ZONIC-ID: ' +

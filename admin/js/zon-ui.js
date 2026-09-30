@@ -65,8 +65,9 @@
 
   var _avatarBlobCache = Object.create(null);
 
-  function userAvatarHtml(fileId, name, sizePx) {
+  function userAvatarHtml(fileId, name, sizePx, opts) {
     sizePx = sizePx || 34;
+    var zoom = !(opts && opts.zoom === false);
     var letter = String(name || "?").trim().charAt(0).toUpperCase() || "?";
     var ph =
       '<span class="avatar-initial rounded-circle bg-label-secondary d-inline-flex align-items-center justify-content-center" style="width:100%;height:100%;font-size:' +
@@ -77,6 +78,19 @@
     if (!fileId) {
       return (
         '<span class="avatar zon-user-avatar flex-shrink-0" style="width:' +
+        sizePx +
+        "px;height:" +
+        sizePx +
+        'px">' +
+        ph +
+        "</span>"
+      );
+    }
+    if (!zoom) {
+      return (
+        '<span class="avatar zon-user-avatar flex-shrink-0" data-avatar-file="' +
+        esc(fileId) +
+        '" style="width:' +
         sizePx +
         "px;height:" +
         sizePx +

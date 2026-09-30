@@ -336,6 +336,8 @@ export class AdminService {
     const [users, runs, territories] = await Promise.all([
       this.db.query(
         `SELECT u.id::text, u.username, u.zonic_id, u.avatar_file_id,
+                u.dateofcreated, u.level, reg.shortname AS region_name,
+                (u.dateofcreated::date = $1::date) AS is_new,
                 (SELECT COUNT(*)::int FROM game_free_run r WHERE r.user_id = u.id AND r.started_at::date = $1::date) AS runs_day,
                 (SELECT COALESCE(SUM(r.distance_km), 0)::float FROM game_free_run r WHERE r.user_id = u.id AND r.started_at::date = $1::date) AS km_day,
                 (SELECT COALESCE(SUM(s.steps), 0)::bigint FROM game_step_activity s WHERE s.user_id = u.id AND s.started_at::date = $1::date) AS steps_day,
@@ -346,12 +348,14 @@ export class AdminService {
                 (SELECT COUNT(*)::int FROM game_territory t WHERE t.owner_user_id = u.id) AS terr_total,
                 (SELECT COALESCE(SUM(t.area_m2), 0)::float FROM game_territory t WHERE t.owner_user_id = u.id) AS area_total
            FROM sys_user u
+           LEFT JOIN info_region reg ON reg.id = u.region_id
           WHERE EXISTS (SELECT 1 FROM game_free_run r WHERE r.user_id = u.id AND r.started_at::date = $1::date)
              OR EXISTS (SELECT 1 FROM game_territory t WHERE t.owner_user_id = u.id AND t.captured_at::date = $1::date)
              OR EXISTS (SELECT 1 FROM game_step_activity s WHERE s.user_id = u.id AND s.started_at::date = $1::date)
+             OR u.dateofcreated::date = $1::date
           ORDER BY (SELECT COALESCE(SUM(r.distance_km), 0) FROM game_free_run r WHERE r.user_id = u.id AND r.started_at::date = $1::date) DESC,
                    u.username ASC
-          LIMIT 200`,
+          LIMIT 1000`,
         [day],
       ),
       this.db.query(
@@ -397,6 +401,10 @@ export class AdminService {
         username: r.username,
         zonicId: r.zonic_id,
         avatarFileId: r.avatar_file_id ?? null,
+        level: (r.level as string | null) ?? null,
+        regionName: (r.region_name as string | null) ?? null,
+        registeredAt: r.dateofcreated ? formatIso(new Date(r.dateofcreated as Date)) : null,
+        isNew: r.is_new === true,
         day: {
           runs: Number(r.runs_day) || 0,
           distanceKm: Number(r.km_day) || 0,

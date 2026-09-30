@@ -316,6 +316,215 @@ div[class*="buy-now"] {
   font-size: 0.8125rem;
 }
 .zon-heat-tip-day { font-weight: 600; margin-bottom: 0.2rem; }
+.zon-heat-tip-hint {
+  margin-top: 0.35rem;
+  padding-top: 0.35rem;
+  border-top: 1px dashed var(--bs-border-color, #dbdade);
+  font-size: 0.75rem;
+  color: var(--bs-primary);
+}
+.zon-heat-cell.is-future { cursor: default; }
+.zon-heat-cell.is-future:hover { outline: none; }
+
+/* Day users modal (heatmap cell click) */
+.zon-daymodal .modal-content { border: 0; border-radius: 1rem; overflow: hidden; }
+.zon-daymodal-head { gap: 0.75rem; padding-bottom: 1rem; }
+.zon-daymodal-head .min-w-0 { min-width: 0; }
+.zon-daymodal-tools {
+  padding: 0 1.5rem 1rem;
+  border-bottom: 1px solid var(--bs-border-color, #dbdade);
+}
+.zon-daymodal-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+.zon-daymodal-tile {
+  --zt: var(--bs-primary);
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.75rem;
+  background: color-mix(in sRGB, var(--zt) 8%, transparent);
+  min-width: 0;
+}
+.zon-daymodal-tile.is-success { --zt: var(--bs-success); }
+.zon-daymodal-tile.is-warning { --zt: var(--bs-warning); }
+.zon-daymodal-tile.is-info { --zt: var(--bs-info); }
+.zon-daymodal-tile > .bx {
+  font-size: 1.25rem;
+  color: var(--zt);
+  flex-shrink: 0;
+}
+.zon-daymodal-tile span {
+  display: block;
+  font-size: 0.6875rem;
+  color: var(--bs-secondary-color, #a5a3ae);
+  line-height: 1.2;
+}
+.zon-daymodal-tile strong {
+  display: block;
+  font-size: 1rem;
+  color: var(--bs-heading-color, #5d596c);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.zon-seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border-radius: 0.65rem;
+  background: color-mix(in sRGB, var(--bs-heading-color, #5d596c) 6%, transparent);
+}
+.zon-seg button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 0;
+  background: transparent;
+  padding: 0.3rem 0.65rem;
+  border-radius: 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--bs-body-color);
+  transition: background-color 0.15s, color 0.15s, box-shadow 0.15s;
+}
+.zon-seg button:hover:not(:disabled):not(.active) { color: var(--bs-primary); }
+.zon-seg-count {
+  min-width: 1.25rem;
+  padding: 0 0.4rem;
+  border-radius: 1rem;
+  font-size: 0.6875rem;
+  line-height: 1.1rem;
+  text-align: center;
+  background: color-mix(in sRGB, var(--bs-heading-color, #5d596c) 10%, transparent);
+}
+.zon-seg button.active {
+  background: var(--bs-paper-bg, var(--bs-body-bg, #fff));
+  color: var(--bs-primary);
+  box-shadow: 0 1px 4px rgba(34, 48, 62, 0.14);
+}
+.zon-seg button.active .zon-seg-count {
+  background: color-mix(in sRGB, var(--bs-primary) 14%, transparent);
+  color: var(--bs-primary);
+}
+.zon-seg button:disabled { opacity: 0.45; cursor: not-allowed; }
+.zon-daymodal-search { width: 15rem; max-width: 100%; }
+.zon-daymodal-body { padding-top: 0.25rem; min-height: 16rem; }
+.zon-daylist-letter {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 0.65rem 0.75rem 0.3rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--bs-primary);
+  background: var(--bs-modal-bg, var(--bs-paper-bg, #fff));
+}
+.zon-dayuser {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.75rem;
+  color: inherit;
+  text-decoration: none;
+  transition: background-color 0.15s;
+}
+a.zon-dayuser:hover,
+a.zon-dayuser:focus-visible {
+  background: color-mix(in sRGB, var(--bs-primary) 7%, transparent);
+  color: inherit;
+  outline: none;
+}
+.zon-dayuser-main { flex: 1; min-width: 0; }
+.zon-dayuser-name {
+  font-weight: 600;
+  color: var(--bs-heading-color, #5d596c);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.zon-dayuser-new { font-size: 0.625rem; vertical-align: 0.1em; }
+.zon-dayuser-sub {
+  font-size: 0.75rem;
+  color: var(--bs-secondary-color, #a5a3ae);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.zon-dayuser-stats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+.zon-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 1rem;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  background: color-mix(in sRGB, var(--bs-heading-color, #5d596c) 7%, transparent);
+  color: var(--bs-secondary-color, #a5a3ae);
+}
+.zon-chip .bx { font-size: 0.95rem; }
+.zon-chip.is-run { background: rgba(64, 196, 99, 0.14); color: #1f8a3f; }
+.zon-chip.is-step { background: color-mix(in sRGB, var(--bs-info) 14%, transparent); color: var(--bs-info); }
+.zon-chip.is-terr { background: color-mix(in sRGB, var(--bs-warning) 16%, transparent); color: var(--bs-warning); }
+.zon-dayuser-go {
+  color: var(--bs-secondary-color, #a5a3ae);
+  transition: transform 0.15s, color 0.15s;
+}
+a.zon-dayuser:hover .zon-dayuser-go { transform: translateX(3px); color: var(--bs-primary); }
+.zon-daymodal-empty {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--bs-secondary-color, #a5a3ae);
+}
+.zon-daymodal-empty > .bx {
+  display: block;
+  font-size: 2.75rem;
+  margin: 0 auto 0.5rem;
+  opacity: 0.7;
+}
+.zon-skel {
+  display: inline-block;
+  border-radius: 0.5rem;
+  background: linear-gradient(90deg, rgba(34, 48, 62, 0.06) 25%, rgba(34, 48, 62, 0.12) 37%, rgba(34, 48, 62, 0.06) 63%);
+  background-size: 400% 100%;
+  animation: zon-skel 1.2s ease-in-out infinite;
+}
+@keyframes zon-skel {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+[data-bs-theme='dark'] .zon-skel {
+  background-image: linear-gradient(90deg, rgba(255, 255, 255, 0.05) 25%, rgba(255, 255, 255, 0.11) 37%, rgba(255, 255, 255, 0.05) 63%);
+}
+[data-bs-theme='dark'] .zon-chip.is-run { color: #56d17a; }
+@media (max-width: 575.98px) {
+  .zon-daymodal-tools { padding: 0 1rem 0.85rem; }
+  .zon-daymodal-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .zon-daymodal-search { width: 100%; }
+  .zon-dayuser { flex-wrap: wrap; }
+  .zon-dayuser-stats {
+    order: 3;
+    width: 100%;
+    justify-content: flex-start;
+    padding-left: calc(42px + 0.85rem);
+  }
+  .zon-dayuser-go { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .zon-skel { animation: none; }
+  .zon-dayuser, .zon-dayuser-go, .zon-seg button { transition: none; }
+}
 @media (max-width: 767.98px) {
   .zon-heat-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
