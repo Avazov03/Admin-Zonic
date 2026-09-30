@@ -231,6 +231,8 @@ div[class*="buy-now"] {
   color: var(--bs-secondary-color, #a5a3ae);
   line-height: 1;
   height: 0.9rem;
+  white-space: nowrap;
+  overflow: visible;
 }
 .zon-heat-body {
   display: flex;
