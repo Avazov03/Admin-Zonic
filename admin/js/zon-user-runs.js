@@ -40,7 +40,7 @@
     draft: ["Qoralama", "warning"],
     cancelled: ["Bekor", "danger"],
   };
-  var CATEGORIES = { frame: "Ramka", challenge: "Challenge", boost: "Kuchaytirgich", badge: "Nishon", theme: "Mavzu" };
+  var CATEGORIES = { frame: "Ramka", challenge: "Challenge", boost: "Kuchaytirgich", booster: "Kuchaytirgich", badge: "Nishon", theme: "Mavzu" };
   var DURATION_MS = { "1h": 3600e3, "1d": 86400e3, "1m": 30 * 86400e3, "3m": 90 * 86400e3 };
   var MONTHS_SHORT = ["yan", "fev", "mar", "apr", "may", "iyn", "iyl", "avg", "sen", "okt", "noy", "dek"];
 

@@ -270,6 +270,14 @@ export class AdminController {
     return this.admin.listMarketItems();
   }
 
+  @Get('Market/Stats')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Sales overview: days=7|30|90|0 (0 = all time)' })
+  marketStats(@Query('days') days?: string) {
+    return this.admin.marketStats(Number(days ?? 30));
+  }
+
   @Post('Market/Items')
   @HttpCode(200)
   @UseGuards(AdminAuthGuard)

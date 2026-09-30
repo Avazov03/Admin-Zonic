@@ -1,29 +1,47 @@
 /**
  * Market — /Admin/Market/Items
- * Yutuqlar kabi: kategoriya tablar + narx bo‘yicha tartib
+ * Ikki ko‘rinish: Sotuvlar (zon-market-stats.js) va Mahsulotlar (kategoriya tablar + narx tartibi).
+ * Tanlangan ko‘rinish URL hash'da (#sotuvlar / #mahsulotlar).
  */
 (function () {
   var U = window.ZonUI;
   var editing = null;
   var allItems = [];
+  var sold = {};
   var activeTab = "all";
+  var itemsLoaded = false;
 
   U.ready(function () {
     var root = U.root();
     if (!root || !window.ZonApi) return;
     root.innerHTML =
+      '<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-6">' +
+      '<div><h4 class="mb-1">Market</h4><p class="mb-0 text-body-secondary">Sotuvlar statistikasi va mahsulotlar</p></div>' +
+      '<div class="zon-seg" id="z-view">' +
+      '<button type="button" data-v="sotuvlar"><i class="bx bx-line-chart"></i>Sotuvlar</button>' +
+      '<button type="button" data-v="mahsulotlar"><i class="bx bx-store"></i>Mahsulotlar</button></div></div>' +
+      '<div id="z-view-sotuvlar" class="d-none"></div>' +
+      '<div id="z-view-mahsulotlar" class="d-none">' +
       '<div class="row g-6 mb-6" id="z-stats"></div>' +
       '<div class="card">' +
       '<div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-3">' +
-      '<div><h5 class="card-title mb-1">Market</h5>' +
+      '<div><h5 class="card-title mb-1">Mahsulotlar</h5>' +
       '<p class="mb-0 text-body-secondary small">Kategoriya bo‘yicha · narx tartibida</p></div>' +
       '<button type="button" class="btn btn-primary" id="z-new">Mahsulot</button></div>' +
       '<div id="z-alert" class="px-6 pt-4"></div>' +
       '<div class="card-body pt-0">' +
       '<ul class="nav nav-pills mb-4 flex-wrap gap-1" id="z-tabs" role="tablist"></ul>' +
       '<div class="tab-content" id="z-tab-panels"></div>' +
-      "</div></div>" +
+      "</div></div></div>" +
       formModal();
+
+    document.getElementById("z-view").onclick = function (e) {
+      var b = e.target.closest("[data-v]");
+      if (b) showView(b.getAttribute("data-v"), true);
+    };
+    window.addEventListener("hashchange", function () {
+      showView(location.hash.slice(1), false);
+    });
 
     document.getElementById("z-new").onclick = function () {
       editing = null;
@@ -40,8 +58,23 @@
       activeTab = btn.getAttribute("data-tab");
       switchTab(activeTab);
     };
-    load();
+    showView(location.hash.slice(1), false);
   });
+
+  function showView(v, push) {
+    if (v !== "mahsulotlar" || !window.ZonMarketStats) v = window.ZonMarketStats ? "sotuvlar" : "mahsulotlar";
+    Array.prototype.forEach.call(document.querySelectorAll("#z-view [data-v]"), function (b) {
+      b.classList.toggle("active", b.getAttribute("data-v") === v);
+    });
+    document.getElementById("z-view-sotuvlar").classList.toggle("d-none", v !== "sotuvlar");
+    document.getElementById("z-view-mahsulotlar").classList.toggle("d-none", v !== "mahsulotlar");
+    if (push) history.replaceState(null, "", "#" + v);
+    if (v === "sotuvlar") window.ZonMarketStats.mount(document.getElementById("z-view-sotuvlar"));
+    else if (!itemsLoaded) {
+      itemsLoaded = true;
+      load();
+    }
+  }
 
   function formModal() {
     return (
@@ -125,6 +158,8 @@
       U.esc(m.currency || "tanga") +
       "</td><td>" +
       U.esc(m.category || "—") +
+      '</td><td class="text-end">' +
+      (sold[m.code] ? '<span class="fw-semibold text-heading">' + U.n(sold[m.code]) + "</span>" : '<span class="text-body-secondary">0</span>') +
       "</td><td>" +
       (m.isPremium ? U.badge("Premium", "warning") + " " : "") +
       (m.isActive ? U.badge("Faol", "success") : U.badge("O'chiq", "secondary")) +
@@ -145,11 +180,11 @@
       U.n(rows.length) +
       " ta · narx bo‘yicha</p>" +
       '<div class="table-responsive"><table class="table table-hover">' +
-      "<thead><tr><th></th><th>Kod</th><th>Nomi</th><th>Narx</th><th>Kategoriya</th><th>Holat</th><th></th></tr></thead>" +
+      '<thead><tr><th></th><th>Kod</th><th>Nomi</th><th>Narx</th><th>Kategoriya</th><th class="text-end" title="Barcha vaqt davomida">Sotildi</th><th>Holat</th><th></th></tr></thead>' +
       "<tbody>" +
       (rows.length
         ? rows.map(rowHtml).join("")
-        : '<tr><td colspan="7" class="text-body-secondary">Bu bo‘lim bo‘sh</td></tr>') +
+        : '<tr><td colspan="8" class="text-body-secondary">Bu bo‘lim bo‘sh</td></tr>') +
       "</tbody></table></div></div>"
     );
   }
@@ -184,8 +219,15 @@
     setAlert("", "");
     var panels = document.getElementById("z-tab-panels");
     panels.innerHTML = '<div class="text-body-secondary py-4">Yuklanmoqda…</div>';
-    ZonApi.get("/Admin/Market/Items")
-      .then(function (data) {
+    var soldReq = window.ZonMarketStats
+      ? ZonMarketStats.soldCounts().catch(function () {
+          return {};
+        })
+      : Promise.resolve({});
+    Promise.all([ZonApi.get("/Admin/Market/Items"), soldReq])
+      .then(function (res) {
+        var data = res[0];
+        sold = res[1] || {};
         allItems = (data && data.items) || [];
         window.__market = allItems;
         var active = allItems.filter(function (x) {
@@ -286,6 +328,7 @@
       .then(function () {
         U.modalHide("zFormModal");
         setAlert("success", "Saqlandi");
+        if (window.ZonMarketStats) ZonMarketStats.invalidate();
         load();
       })
       .catch(function (err) {

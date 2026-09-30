@@ -1211,6 +1211,134 @@ export class AdminService {
     return { items: rows.map((r) => this.mapMarket(r)) };
   }
 
+  /** Sales overview for the last `days` days (0 = all time); chart covers `days` or 90 when all-time. */
+  async marketStats(days: number) {
+    const d = [7, 30, 90].includes(days) ? days : 0;
+    const chartDays = d || 90;
+    const since = d ? `(CURRENT_DATE - ${d - 1})::timestamp` : `'-infinity'::timestamp`;
+    const prevSince = d ? `(CURRENT_DATE - ${2 * d - 1})::timestamp` : `'-infinity'::timestamp`;
+
+    const [[sum], daily, items, buyers, recent] = await Promise.all([
+      this.db.query(
+        `SELECT COUNT(*)::int AS total,
+                COUNT(DISTINCT user_id)::int AS buyers_total,
+                COALESCE(SUM(price_tanga), 0)::bigint AS tanga_total,
+                COUNT(*) FILTER (WHERE purchased_at >= ${since})::int AS cnt,
+                COUNT(DISTINCT user_id) FILTER (WHERE purchased_at >= ${since})::int AS buyers,
+                COALESCE(SUM(price_tanga) FILTER (WHERE purchased_at >= ${since}), 0)::bigint AS tanga,
+                COALESCE(SUM(xp_spent) FILTER (WHERE purchased_at >= ${since}), 0)::bigint AS xp,
+                COUNT(*) FILTER (WHERE purchased_at >= ${prevSince} AND purchased_at < ${since})::int AS prev_cnt,
+                COALESCE(SUM(price_tanga) FILTER (WHERE purchased_at >= ${prevSince} AND purchased_at < ${since}), 0)::bigint AS prev_tanga,
+                COUNT(*) FILTER (WHERE purchased_at >= CURRENT_DATE)::int AS today,
+                (SELECT COUNT(*) FROM sys_user WHERE is_admin = false)::int AS users
+           FROM market_purchase`,
+      ),
+      this.db.query(
+        `SELECT to_char(g.day, 'YYYY-MM-DD') AS day,
+                COUNT(p.id)::int AS purchases,
+                COALESCE(SUM(p.price_tanga), 0)::bigint AS tanga
+           FROM generate_series((CURRENT_DATE - ${chartDays - 1})::timestamp, CURRENT_DATE::timestamp, interval '1 day') AS g(day)
+           LEFT JOIN market_purchase p ON p.purchased_at >= g.day AND p.purchased_at < g.day + interval '1 day'
+          GROUP BY g.day ORDER BY g.day`,
+      ),
+      this.db.query(
+        `SELECT i.id::text, i.code, i.title, i.category, i.image_file_id, i.price_tanga, i.is_active, i.is_premium,
+                COUNT(p.id) FILTER (WHERE p.purchased_at >= ${since})::int AS cnt,
+                COUNT(DISTINCT p.user_id) FILTER (WHERE p.purchased_at >= ${since})::int AS buyers,
+                COALESCE(SUM(p.price_tanga) FILTER (WHERE p.purchased_at >= ${since}), 0)::bigint AS tanga,
+                COUNT(p.id)::int AS total,
+                MAX(p.purchased_at) AS last_at
+           FROM market_item i
+           LEFT JOIN market_purchase p ON p.item_id = i.id
+          GROUP BY i.id
+          ORDER BY cnt DESC, total DESC, i.title`,
+      ),
+      this.db.query(
+        `SELECT u.id::text, u.username, u.zonic_id, u.avatar_file_id,
+                COUNT(p.id)::int AS cnt, COALESCE(SUM(p.price_tanga), 0)::bigint AS tanga,
+                MAX(p.purchased_at) AS last_at
+           FROM market_purchase p
+           JOIN sys_user u ON u.id = p.user_id
+          WHERE p.purchased_at >= ${since}
+          GROUP BY u.id
+          ORDER BY tanga DESC, cnt DESC, u.username
+          LIMIT 10`,
+      ),
+      this.db.query(
+        `SELECT p.id::text, p.price_tanga, p.purchased_at,
+                u.id::text AS user_id, u.username, u.zonic_id, u.avatar_file_id,
+                i.code, i.title, i.category, i.image_file_id
+           FROM market_purchase p
+           JOIN sys_user u ON u.id = p.user_id
+           JOIN market_item i ON i.id = p.item_id
+          WHERE p.purchased_at >= ${since}
+          ORDER BY p.purchased_at DESC
+          LIMIT 30`,
+      ),
+    ]);
+
+    const iso = (v: unknown) => (v ? formatIso(new Date(v as Date)) : null);
+    return {
+      days: d,
+      chartDays,
+      summary: {
+        purchases: Number(sum.cnt),
+        buyers: Number(sum.buyers),
+        tanga: Number(sum.tanga),
+        xp: Number(sum.xp),
+        prevPurchases: d ? Number(sum.prev_cnt) : null,
+        prevTanga: d ? Number(sum.prev_tanga) : null,
+        today: Number(sum.today),
+        totalPurchases: Number(sum.total),
+        totalBuyers: Number(sum.buyers_total),
+        totalTanga: Number(sum.tanga_total),
+        users: Number(sum.users),
+      },
+      daily: daily.map((r: Record<string, unknown>) => ({
+        day: r.day,
+        purchases: Number(r.purchases),
+        tanga: Number(r.tanga),
+      })),
+      items: items.map((r: Record<string, unknown>) => ({
+        itemId: r.id,
+        code: r.code,
+        title: r.title,
+        category: r.category ?? null,
+        imageFileId: r.image_file_id ?? null,
+        price: Number(r.price_tanga),
+        isActive: r.is_active === true,
+        isPremium: r.is_premium === true,
+        purchases: Number(r.cnt),
+        buyers: Number(r.buyers),
+        tanga: Number(r.tanga),
+        totalPurchases: Number(r.total),
+        lastAt: iso(r.last_at),
+      })),
+      topBuyers: buyers.map((r: Record<string, unknown>) => ({
+        userId: r.id,
+        username: r.username,
+        zonicId: r.zonic_id,
+        avatarFileId: r.avatar_file_id ?? null,
+        purchases: Number(r.cnt),
+        tanga: Number(r.tanga),
+        lastAt: iso(r.last_at),
+      })),
+      recent: recent.map((r: Record<string, unknown>) => ({
+        id: r.id,
+        price: Number(r.price_tanga),
+        purchasedAt: iso(r.purchased_at),
+        userId: r.user_id,
+        username: r.username,
+        zonicId: r.zonic_id,
+        avatarFileId: r.avatar_file_id ?? null,
+        code: r.code,
+        title: r.title,
+        category: r.category ?? null,
+        imageFileId: r.image_file_id ?? null,
+      })),
+    };
+  }
+
   async upsertMarketItem(dto: UpsertMarketItemDto) {
     const [row] = await this.db.query(
       `INSERT INTO market_item
