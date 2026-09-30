@@ -124,6 +124,14 @@ export class AdminController {
     return this.admin.listUsers(q.q, q.status ?? 'all', q.page ?? 1, q.pageSize ?? 20);
   }
 
+  @Get('Leaderboard/Regions')
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Per-region totals: period=7d|week|month|all' })
+  regionsLeaderboard(@Query('period') period?: string) {
+    return this.admin.regionsLeaderboard(period ?? 'month');
+  }
+
   @Get('Leaderboard')
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth()

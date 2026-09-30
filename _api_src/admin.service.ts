@@ -34,6 +34,15 @@ const MIME_TO_EXT: Record<string, string> = {
   'image/gif': '.gif',
 };
 
+const LEADERBOARD_SINCE: Record<string, string> = {
+  '7d': `(CURRENT_DATE - 6)::timestamp`,
+  week: `date_trunc('week', CURRENT_DATE)`,
+  month: `date_trunc('month', CURRENT_DATE)`,
+  all: `'-infinity'::timestamp`,
+};
+
+const UZ_COUNTRY_ID = 211;
+
 @Injectable()
 export class AdminService {
   private readonly uploadDir = join(process.cwd(), 'uploads', 'admin');
@@ -543,14 +552,8 @@ export class AdminService {
       xp: 'COALESCE(w.xp, 0)',
     };
     const m = METRICS[metric] ? metric : 'km';
-    const p = m === 'xp' ? 'all' : ['7d', 'week', 'month', 'all'].includes(period) ? period : 'week';
-    const SINCE: Record<string, string> = {
-      '7d': `(CURRENT_DATE - 6)::timestamp`,
-      week: `date_trunc('week', CURRENT_DATE)`,
-      month: `date_trunc('month', CURRENT_DATE)`,
-      all: `'-infinity'::timestamp`,
-    };
-    const since = SINCE[p];
+    const p = m === 'xp' ? 'all' : LEADERBOARD_SINCE[period] ? period : 'week';
+    const since = LEADERBOARD_SINCE[p];
     const lim = Math.min(Math.max(Math.floor(limit) || 50, 1), 200);
     const params: unknown[] = [];
     let regionSql = '';
@@ -625,6 +628,79 @@ export class AdminService {
           xp: values.xp,
         };
       }),
+    };
+  }
+
+  /** Per-region totals for the period; every Uzbek region is listed, users without a region come as regionId=null. */
+  async regionsLeaderboard(period: string) {
+    const p = LEADERBOARD_SINCE[period] ? period : 'month';
+    const since = LEADERBOARD_SINCE[p];
+    const [rows, regions, [range]] = await Promise.all([
+      this.db.query(
+        `WITH r AS (SELECT user_id, SUM(distance_km) AS km, COUNT(*) AS runs
+                      FROM game_free_run WHERE started_at >= ${since} GROUP BY user_id),
+              s AS (SELECT user_id, SUM(steps) AS steps
+                      FROM game_step_activity WHERE started_at >= ${since} GROUP BY user_id),
+              t AS (SELECT owner_user_id AS user_id, COUNT(*) AS terr, SUM(area_m2) AS area
+                      FROM game_territory WHERE captured_at >= ${since} GROUP BY owner_user_id)
+         SELECT CASE WHEN reg.id IS NULL THEN NULL ELSE u.region_id END AS region_id,
+                COUNT(*)::int AS users,
+                COUNT(*) FILTER (WHERE COALESCE(r.km, 0) > 0 OR COALESCE(s.steps, 0) > 0 OR COALESCE(t.terr, 0) > 0)::int AS active,
+                COUNT(*) FILTER (WHERE u.dateofcreated >= ${since})::int AS new_users,
+                COALESCE(SUM(r.km), 0)::float AS km,
+                COALESCE(SUM(r.runs), 0)::int AS runs,
+                COALESCE(SUM(s.steps), 0)::bigint AS steps,
+                COALESCE(SUM(t.terr), 0)::int AS terr,
+                COALESCE(SUM(t.area), 0)::float AS area
+           FROM sys_user u
+           LEFT JOIN info_region reg ON reg.id = u.region_id AND reg.countryid = ${UZ_COUNTRY_ID}
+           LEFT JOIN r ON r.user_id = u.id
+           LEFT JOIN s ON s.user_id = u.id
+           LEFT JOIN t ON t.user_id = u.id
+          WHERE u.is_admin = false
+          GROUP BY 1`,
+      ),
+      this.db.query(`SELECT id, shortname FROM info_region WHERE countryid = ${UZ_COUNTRY_ID} ORDER BY id`),
+      this.db.query(
+        `SELECT to_char(${p === 'all' ? 'NULL::date' : since}, 'YYYY-MM-DD') AS since, to_char(CURRENT_DATE, 'YYYY-MM-DD') AS today`,
+      ),
+    ]);
+
+    const byRegion = new Map<number | null, Record<string, unknown>>();
+    rows.forEach((r: Record<string, unknown>) => byRegion.set(r.region_id != null ? Number(r.region_id) : null, r));
+    const toItem = (regionId: number | null, name: string | null) => {
+      const r = byRegion.get(regionId) ?? {};
+      const users = Number(r.users ?? 0);
+      const km = Math.round(Number(r.km ?? 0) * 100) / 100;
+      const areaKm2 = Math.round((Number(r.area ?? 0) / 1_000_000) * 10000) / 10000;
+      return {
+        regionId,
+        name,
+        users,
+        active: Number(r.active ?? 0),
+        newUsers: Number(r.new_users ?? 0),
+        km,
+        runs: Number(r.runs ?? 0),
+        steps: Number(r.steps ?? 0),
+        territories: Number(r.terr ?? 0),
+        areaKm2,
+      };
+    };
+    const items = regions.map((g: { id: number; shortname: string }) =>
+      toItem(Number(g.id), regionUz(Number(g.id), g.shortname)),
+    );
+    const unknown = toItem(null, null);
+
+    return {
+      period: p,
+      since: range?.since ?? null,
+      today: range?.today ?? null,
+      items,
+      unassigned: unknown,
+      totals: {
+        users: items.reduce((a: number, x: { users: number }) => a + x.users, 0) + unknown.users,
+        withRegion: items.reduce((a: number, x: { users: number }) => a + x.users, 0),
+      },
     };
   }
 
